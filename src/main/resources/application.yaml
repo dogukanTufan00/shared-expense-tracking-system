@@ -1,0 +1,19 @@
+spring:
+  application:
+    name: shared-expense-tracking-system
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/roommate_db}
+    username: ${DB_USERNAME:roommate_user}
+    password: ${DB_PASSWORD:change_me}
+  jpa:
+    hibernate:
+      # Let Hibernate create/update tables from the entities (fine for the course phase).
+      # Later we may move to Flyway migrations.
+      ddl-auto: update
+    show-sql: true
+    open-in-view: false
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:replace-this-with-a-long-random-secret-at-least-32-chars}
+    expiration-ms: ${JWT_EXPIRATION_MS:86400000}
