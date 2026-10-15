@@ -9,8 +9,10 @@ import com.dogukan_tufan.shared_expense_tracking_system.entity.MembershipRole;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.User;
 import com.dogukan_tufan.shared_expense_tracking_system.exception.ResourceNotFoundException;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.ExpenseRepository;
+import com.dogukan_tufan.shared_expense_tracking_system.repository.ExpenseShareRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.HouseholdRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.MembershipRepository;
+import com.dogukan_tufan.shared_expense_tracking_system.repository.PaymentRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -33,6 +35,8 @@ public class HouseholdService {
     private final HouseholdRepository householdRepository;
     private final MembershipRepository membershipRepository;
     private final ExpenseRepository expenseRepository;
+    private final ExpenseShareRepository expenseShareRepository;
+    private final PaymentRepository paymentRepository;
     private final HouseholdAccessService accessService;
 
     public HouseholdResponse create(CreateHouseholdRequest request, String currentUserEmail) {
@@ -79,11 +83,12 @@ public class HouseholdService {
         Membership membership = accessService.requireActiveMembership(currentUser.getId(), householdId);
         accessService.requireAdmin(membership);
 
-        // Expenses and memberships both hold a foreign key to this household, so they must be
-        // cleared first or the delete below fails with a foreign-key violation. (Once
-        // ExpenseShare rows start being created in the next checkpoint, those will need to be
-        // cleared before their Expense here too.)
+        // Everything below holds a foreign key back to this household (ExpenseShare to its
+        // Expense, which holds one to the household), so the order matters: shares, then
+        // expenses and payments, then memberships, then the household itself.
+        expenseShareRepository.deleteByExpenseHouseholdId(householdId);
         expenseRepository.deleteByHouseholdId(householdId);
+        paymentRepository.deleteByHouseholdId(householdId);
         membershipRepository.deleteByHouseholdId(householdId);
         householdRepository.delete(membership.getHousehold());
     }

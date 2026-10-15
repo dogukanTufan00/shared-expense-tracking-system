@@ -1,8 +1,10 @@
 package com.dogukan_tufan.shared_expense_tracking_system.controller;
 
+import com.dogukan_tufan.shared_expense_tracking_system.dto.balance.BalanceResponse;
 import com.dogukan_tufan.shared_expense_tracking_system.dto.household.CreateHouseholdRequest;
 import com.dogukan_tufan.shared_expense_tracking_system.dto.household.HouseholdResponse;
 import com.dogukan_tufan.shared_expense_tracking_system.dto.household.UpdateHouseholdRequest;
+import com.dogukan_tufan.shared_expense_tracking_system.service.BalanceService;
 import com.dogukan_tufan.shared_expense_tracking_system.service.HouseholdService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -32,6 +34,7 @@ import java.util.List;
 public class HouseholdController {
 
     private final HouseholdService householdService;
+    private final BalanceService balanceService;
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -59,5 +62,10 @@ public class HouseholdController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable Long id, Authentication authentication) {
         householdService.delete(id, authentication.getName());
+    }
+
+    @GetMapping("/{id}/balances")
+    public List<BalanceResponse> getBalances(@PathVariable Long id, Authentication authentication) {
+        return balanceService.getBalances(id, authentication.getName());
     }
 }

@@ -19,6 +19,9 @@ public interface MembershipRepository extends JpaRepository<Membership, Long> {
     // Households a given user currently belongs to (GET /households).
     List<Membership> findByUserIdAndLeftAtIsNull(Long userId);
 
+    // Every membership, including people who have left (balances: a former member can still owe money).
+    List<Membership> findByHouseholdId(Long householdId);
+
     // Used when deleting a household: every membership (active or not) holds a foreign key to it.
     void deleteByHouseholdId(Long householdId);
 }

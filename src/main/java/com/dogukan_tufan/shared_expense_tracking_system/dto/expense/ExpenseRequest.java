@@ -2,6 +2,7 @@ package com.dogukan_tufan.shared_expense_tracking_system.dto.expense;
 
 import com.dogukan_tufan.shared_expense_tracking_system.entity.ExpenseCategory;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotNull;
 
 import java.math.BigDecimal;
@@ -16,6 +17,7 @@ public record ExpenseRequest(
 
         @NotNull(message = "Amount is required")
         @DecimalMin(value = "0.01", message = "Amount must be greater than 0")
+        @Digits(integer = 10, fraction = 2, message = "Amount can have at most 2 decimal places")
         BigDecimal amount,
 
         @NotNull(message = "Category is required")
