@@ -1,3 +1,5 @@
+**English** | [Türkçe](README.tr.md)
+
 # Shared Expense Tracking System
 
 A REST API for tracking shared household expenses between roommates — a localized take on Splitwise for students and young professionals in Türkiye.
