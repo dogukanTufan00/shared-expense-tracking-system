@@ -1,6 +1,7 @@
 package com.dogukan_tufan.shared_expense_tracking_system.controller;
 
 import com.dogukan_tufan.shared_expense_tracking_system.dto.balance.BalanceResponse;
+import com.dogukan_tufan.shared_expense_tracking_system.dto.balance.SettlementResponse;
 import com.dogukan_tufan.shared_expense_tracking_system.dto.household.CreateHouseholdRequest;
 import com.dogukan_tufan.shared_expense_tracking_system.dto.household.HouseholdResponse;
 import com.dogukan_tufan.shared_expense_tracking_system.dto.household.UpdateHouseholdRequest;
@@ -67,5 +68,10 @@ public class HouseholdController {
     @GetMapping("/{id}/balances")
     public List<BalanceResponse> getBalances(@PathVariable Long id, Authentication authentication) {
         return balanceService.getBalances(id, authentication.getName());
+    }
+
+    @GetMapping("/{id}/settlements")
+    public List<SettlementResponse> getSettlements(@PathVariable Long id, Authentication authentication) {
+        return balanceService.getSettlements(id, authentication.getName());
     }
 }

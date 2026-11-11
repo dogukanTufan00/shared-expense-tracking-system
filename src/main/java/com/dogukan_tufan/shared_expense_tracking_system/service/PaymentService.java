@@ -45,13 +45,15 @@ public class PaymentService {
             throw new ForbiddenActionException("Only the sender or a household admin can record this payment");
         }
 
-        Membership fromMembership = requireActiveMember(householdId, request.fromUserId());
-        Membership toMembership = requireActiveMember(householdId, request.toUserId());
+        // Former members are allowed here: someone who moved out can still owe or be owed money,
+        // and that debt must be settleable. The requester above must still be an active member.
+        User fromUser = requireMember(householdId, request.fromUserId());
+        User toUser = requireMember(householdId, request.toUserId());
 
         Payment payment = new Payment(
                 requesterMembership.getHousehold(),
-                fromMembership.getUser(),
-                toMembership.getUser(),
+                fromUser,
+                toUser,
                 request.amount().setScale(2, RoundingMode.HALF_UP));
         paymentRepository.save(payment);
 
@@ -84,10 +86,12 @@ public class PaymentService {
         paymentRepository.delete(payment);
     }
 
-    private Membership requireActiveMember(Long householdId, Long userId) {
-        return membershipRepository.findByUserIdAndHouseholdIdAndLeftAtIsNull(userId, householdId)
-                .orElseThrow(() -> new BadRequestException(
-                        "User " + userId + " is not an active member of this household"));
+    private User requireMember(Long householdId, Long userId) {
+        if (!membershipRepository.existsByUserIdAndHouseholdId(userId, householdId)) {
+            throw new BadRequestException("User " + userId + " is not a member of this household");
+        }
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found: " + userId));
     }
 
     private User getUser(String email) {

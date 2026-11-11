@@ -74,6 +74,12 @@ public class MembershipService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "No active member with user id " + targetUserId + " in this household"));
 
+        // Without at least one admin, nobody could add/rename/delete the household anymore.
+        if (targetMembership.getRole() == MembershipRole.ADMIN
+                && membershipRepository.countByHouseholdIdAndRoleAndLeftAtIsNull(householdId, MembershipRole.ADMIN) <= 1) {
+            throw new ConflictException("The last admin of a household cannot be removed");
+        }
+
         // Soft delete: leftAt set, row kept. Past expenses still point at a real Membership/User.
         targetMembership.setLeftAt(Instant.now());
     }

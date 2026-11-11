@@ -1,6 +1,7 @@
 package com.dogukan_tufan.shared_expense_tracking_system.service;
 
 import com.dogukan_tufan.shared_expense_tracking_system.dto.balance.BalanceResponse;
+import com.dogukan_tufan.shared_expense_tracking_system.dto.balance.SettlementResponse;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.Expense;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.ExpenseShare;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.Membership;
@@ -17,6 +18,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -79,6 +82,67 @@ public class BalanceService {
                 // Former members who are fully settled are just noise, so they are hidden.
                 .filter(b -> b.netBalance().signum() != 0 || activeUserIds.contains(b.userId()))
                 .toList();
+    }
+
+    // Greedy "who pays whom": always match the biggest debtor with the biggest creditor.
+    // Each step fully settles at least one person, so there are at most (n - 1) payments for n people.
+    // Matching largest against largest keeps the list short and easy to follow. Only a suggestion:
+    // nothing is stored, the same as balances.
+    public List<SettlementResponse> getSettlements(Long householdId, String currentUserEmail) {
+        // getBalances also checks that the current user is an active member of this household.
+        List<BalanceResponse> balances = getBalances(householdId, currentUserEmail);
+
+        // Positive net = the household owes this person (creditor). Negative net = this person owes (debtor).
+        // Zero balances are skipped: nobody has to pay or receive anything.
+        List<BalanceResponse> debtors = new ArrayList<>();
+        List<BalanceResponse> creditors = new ArrayList<>();
+        for (BalanceResponse balance : balances) {
+            if (balance.netBalance().signum() < 0) {
+                debtors.add(balance);
+            } else if (balance.netBalance().signum() > 0) {
+                creditors.add(balance);
+            }
+        }
+
+        // Biggest amount first, comparing the absolute value so debtors and creditors use the same rule.
+        Comparator<BalanceResponse> biggestFirst =
+                Comparator.comparing((BalanceResponse b) -> b.netBalance().abs()).reversed();
+        debtors.sort(biggestFirst);
+        creditors.sort(biggestFirst);
+
+        // How much each person still has to pay or still has to receive.
+        // Kept in separate arrays so we can reduce them while the lists above stay unchanged.
+        BigDecimal[] debtLeft = new BigDecimal[debtors.size()];
+        for (int i = 0; i < debtors.size(); i++) {
+            debtLeft[i] = debtors.get(i).netBalance().abs();
+        }
+        BigDecimal[] creditLeft = new BigDecimal[creditors.size()];
+        for (int i = 0; i < creditors.size(); i++) {
+            creditLeft[i] = creditors.get(i).netBalance();
+        }
+
+        List<SettlementResponse> settlements = new ArrayList<>();
+        int d = 0; // index of the current debtor
+        int c = 0; // index of the current creditor
+        while (d < debtors.size() && c < creditors.size()) {
+            // The payment is as big as possible without overpaying either side.
+            BigDecimal amount = debtLeft[d].min(creditLeft[c]);
+            BalanceResponse from = debtors.get(d);
+            BalanceResponse to = creditors.get(c);
+            settlements.add(new SettlementResponse(from.userId(), from.name(), to.userId(), to.name(), amount));
+
+            debtLeft[d] = debtLeft[d].subtract(amount);
+            creditLeft[c] = creditLeft[c].subtract(amount);
+
+            // Someone who reached zero is fully settled, so we move on to the next person in that list.
+            if (debtLeft[d].signum() == 0) {
+                d++;
+            }
+            if (creditLeft[c].signum() == 0) {
+                c++;
+            }
+        }
+        return settlements;
     }
 
     private <T> Map<Long, BigDecimal> sumBy(List<T> items, Function<T, Long> keyFn, Function<T, BigDecimal> amountFn) {
