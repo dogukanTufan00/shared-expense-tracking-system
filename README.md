@@ -23,12 +23,17 @@ Users register, create a household, invite their roommates, and record who paid 
 - **Households** — create, list, view, rename and delete households. The creator becomes the household's `ADMIN`.
 - **Members** — admins add roommates by email and remove them. A household has at most 3 active members.
 - **Expenses** — full CRUD for expenses with amount, category (`RENT`, `UTILITIES`, `GROCERIES`, `OTHER`), payer, date and a recurring flag.
+- **Expense splitting** — every expense is split equally among the household's active members at the time it is created. Amounts are split in whole cents so the shares always add up exactly (e.g. 100 TL / 3 = 33.34 + 33.33 + 33.33).
+- **Payments** — record a repayment from one member to another (`POST`, `GET`, `DELETE`). Only the sender or an admin can record or delete a payment. Former members can still be the sender or receiver, so a person who moved out can settle their debt (an admin records it).
+- **Balances** — each member's net balance (positive = the household owes them, negative = they owe). Computed live from expenses, shares and payments; nothing is stored. Former members with a non-zero balance stay visible.
+- **Settlements ("who pays whom")** — a short list of suggested payments that settles everyone, using a greedy algorithm (largest debtor pays largest creditor; at most n-1 payments).
 - **Authorization rules enforced in the backend**
   - Only active members can see a household and its data. Non-members get `404`, so the API does not reveal which households exist.
   - Only admins can rename/delete a household or manage members.
   - Only the payer or an admin can edit or delete an expense.
   - Removing a member is a soft delete (`leftAt` is set), so past expenses keep pointing at a real user.
-- **Consistent error responses** — validation errors, missing resources, conflicts and forbidden actions all return a uniform JSON error body with the correct HTTP status code.
+  - The last admin of a household cannot be removed (409).
+- **Consistent error responses** — validation errors, missing resources, conflicts and forbidden actions all return a uniform JSON error body with the correct HTTP status code. Malformed JSON, unknown enum values and wrongly typed path parameters return `400`.
 
 ## Architecture
 
@@ -45,7 +50,7 @@ controller  →  service  →  repository  →  entity
 
 ### Data model
 
-`User`, `Household`, `Membership` (user ↔ household with a role), `Expense`, `ExpenseShare`.
+`User`, `Household`, `Membership` (user ↔ household with a role), `Expense`, `ExpenseShare` (how much each member owes for an expense), `Payment` (a repayment between two members).
 
 ## Getting Started
 
@@ -100,6 +105,8 @@ To call protected endpoints from Swagger:
 | `GET` | `/api/households/{id}` | Get a household |
 | `PUT` | `/api/households/{id}` | Rename a household (admin) |
 | `DELETE` | `/api/households/{id}` | Delete a household (admin) |
+| `GET` | `/api/households/{id}/balances` | Net balance of each member |
+| `GET` | `/api/households/{id}/settlements` | Suggested payments: who pays whom |
 | `POST` | `/api/households/{householdId}/members` | Add a member by email (admin) |
 | `GET` | `/api/households/{householdId}/members` | List active members |
 | `DELETE` | `/api/households/{householdId}/members/{userId}` | Remove a member (admin) |
@@ -108,13 +115,16 @@ To call protected endpoints from Swagger:
 | `GET` | `/api/households/{householdId}/expenses/{expenseId}` | Get an expense |
 | `PUT` | `/api/households/{householdId}/expenses/{expenseId}` | Update an expense (payer or admin) |
 | `DELETE` | `/api/households/{householdId}/expenses/{expenseId}` | Delete an expense (payer or admin) |
+| `POST` | `/api/households/{householdId}/payments` | Record a payment (sender or admin) |
+| `GET` | `/api/households/{householdId}/payments` | List payments |
+| `DELETE` | `/api/households/{householdId}/payments/{paymentId}` | Delete a payment (sender or admin) |
 
 All endpoints except `/api/auth/**` require a valid JWT.
 
 ## Roadmap
 
-- Split expenses between members (`ExpenseShare`) and calculate balances ("who owes whom")
 - Settlement tracking with Turkish payment methods (IBAN / FAST / Papara)
 - Automated tests
 - Database migrations with Flyway
-- Flutter mobile client
+- Flutter mobile client (in progress)
+- User profile with IBAN for faster repayments
