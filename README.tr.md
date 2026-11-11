@@ -126,5 +126,6 @@ Korumalı endpoint'leri Swagger'dan çağırmak için:
 - Türkiye'deki ödeme yöntemleriyle (IBAN / FAST / Papara) borç kapatma takibi
 - Otomatik testler
 - Flyway ile veritabanı migration'ları
-- Flutter mobil uygulama (geliştirme sürüyor)
+- Flutter mobil uygulama: [roommate-expense-app](https://github.com/dogukanTufan00/roommate-expense-app)
 - IBAN bilgisi içeren kullanıcı profili (daha hızlı geri ödeme için)
+- Giderlere fiş, fatura veya dekont fotoğrafı ekleme

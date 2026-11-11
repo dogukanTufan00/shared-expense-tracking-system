@@ -126,5 +126,6 @@ All endpoints except `/api/auth/**` require a valid JWT.
 - Settlement tracking with Turkish payment methods (IBAN / FAST / Papara)
 - Automated tests
 - Database migrations with Flyway
-- Flutter mobile client (in progress)
+- Flutter mobile client: [roommate-expense-app](https://github.com/dogukanTufan00/roommate-expense-app)
 - User profile with IBAN for faster repayments
+- Attach a receipt, bill or bank-transfer photo to an expense
