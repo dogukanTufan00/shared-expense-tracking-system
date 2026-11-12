@@ -1,6 +1,12 @@
 spring:
   application:
     name: shared-expense-tracking-system
+  servlet:
+    multipart:
+      # Files above these sizes are rejected by Spring before our code runs (see GlobalExceptionHandler -> 413).
+      # The request limit is a bit higher than the file limit to leave room for the form fields.
+      max-file-size: 10MB
+      max-request-size: 11MB
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/roommate_db}
     username: ${DB_USERNAME:roommate_user}
@@ -17,3 +23,6 @@ app:
   jwt:
     secret: ${JWT_SECRET:replace-this-with-a-long-random-secret-at-least-32-chars}
     expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+  uploads:
+    # Folder for attachment files. Relative paths are resolved from the folder the app is started in.
+    dir: ${UPLOADS_DIR:./uploads}

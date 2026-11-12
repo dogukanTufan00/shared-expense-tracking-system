@@ -14,6 +14,7 @@ import com.dogukan_tufan.shared_expense_tracking_system.entity.User;
 import com.dogukan_tufan.shared_expense_tracking_system.exception.BadRequestException;
 import com.dogukan_tufan.shared_expense_tracking_system.exception.ForbiddenActionException;
 import com.dogukan_tufan.shared_expense_tracking_system.exception.ResourceNotFoundException;
+import com.dogukan_tufan.shared_expense_tracking_system.repository.AttachmentRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.CategorySplitDefaultRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.ExpenseRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.ExpenseShareRepository;
@@ -45,6 +46,8 @@ public class ExpenseService {
     private final CategorySplitDefaultRepository categorySplitDefaultRepository;
     private final HouseholdAccessService accessService;
     private final ShareValidator shareValidator;
+    private final AttachmentRepository attachmentRepository;
+    private final AttachmentService attachmentService;
 
     public ExpenseResponse create(Long householdId, ExpenseRequest request, String currentUserEmail) {
         User currentUser = getUser(currentUserEmail);
@@ -69,7 +72,7 @@ public class ExpenseService {
 
         List<ExpenseShare> shares = recalculateShares(expense, plan.shares());
 
-        return ExpenseResponse.from(expense, shares);
+        return toResponse(expense, shares);
     }
 
     public List<ExpenseResponse> list(Long householdId, String currentUserEmail) {
@@ -82,8 +85,7 @@ public class ExpenseService {
                 .collect(Collectors.groupingBy(share -> share.getExpense().getId()));
 
         return expenseRepository.findByHouseholdId(householdId).stream()
-                .map(expense -> ExpenseResponse.from(
-                        expense, sharesByExpenseId.getOrDefault(expense.getId(), List.of())))
+                .map(expense -> toResponse(expense, sharesByExpenseId.getOrDefault(expense.getId(), List.of())))
                 .toList();
     }
 
@@ -92,7 +94,7 @@ public class ExpenseService {
         accessService.requireActiveMembership(currentUser.getId(), householdId);
 
         Expense expense = findExpense(householdId, expenseId);
-        return ExpenseResponse.from(expense, expenseShareRepository.findByExpenseId(expense.getId()));
+        return toResponse(expense, expenseShareRepository.findByExpenseId(expense.getId()));
     }
 
     public ExpenseResponse update(Long householdId, Long expenseId, ExpenseRequest request, String currentUserEmail) {
@@ -119,7 +121,7 @@ public class ExpenseService {
 
         List<ExpenseShare> shares = recalculateShares(expense, plan.shares());
 
-        return ExpenseResponse.from(expense, shares);
+        return toResponse(expense, shares);
     }
 
     public void delete(Long householdId, Long expenseId, String currentUserEmail) {
@@ -129,7 +131,8 @@ public class ExpenseService {
         Expense expense = findExpense(householdId, expenseId);
         requirePayerOrAdmin(expense, currentUser, requesterMembership);
 
-        // Its shares hold a foreign key to this expense, so they go first.
+        // Attachments point at this expense too, so their rows and files go first. Then the shares.
+        attachmentService.deleteForExpense(expense.getId());
         expenseShareRepository.deleteByExpenseId(expense.getId());
         expenseRepository.delete(expense);
     }
@@ -336,6 +339,12 @@ public class ExpenseService {
         return membershipRepository.findByHouseholdIdAndLeftAtIsNull(householdId).stream()
                 .map(Membership::getUser)
                 .toList();
+    }
+
+    // Builds the response including the attachment count (one count query per expense; lists are small).
+    private ExpenseResponse toResponse(Expense expense, List<ExpenseShare> shares) {
+        int attachmentCount = (int) attachmentRepository.countByExpenseId(expense.getId());
+        return ExpenseResponse.from(expense, shares, attachmentCount);
     }
 
     private Expense findExpense(Long householdId, Long expenseId) {

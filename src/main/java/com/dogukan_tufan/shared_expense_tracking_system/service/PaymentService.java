@@ -9,6 +9,7 @@ import com.dogukan_tufan.shared_expense_tracking_system.entity.User;
 import com.dogukan_tufan.shared_expense_tracking_system.exception.BadRequestException;
 import com.dogukan_tufan.shared_expense_tracking_system.exception.ForbiddenActionException;
 import com.dogukan_tufan.shared_expense_tracking_system.exception.ResourceNotFoundException;
+import com.dogukan_tufan.shared_expense_tracking_system.repository.AttachmentRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.MembershipRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.PaymentRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.UserRepository;
@@ -28,6 +29,8 @@ public class PaymentService {
     private final PaymentRepository paymentRepository;
     private final MembershipRepository membershipRepository;
     private final HouseholdAccessService accessService;
+    private final AttachmentRepository attachmentRepository;
+    private final AttachmentService attachmentService;
 
     public PaymentResponse create(Long householdId, PaymentRequest request, String currentUserEmail) {
         User currentUser = getUser(currentUserEmail);
@@ -58,7 +61,7 @@ public class PaymentService {
                 request.note());
         paymentRepository.save(payment);
 
-        return PaymentResponse.from(payment);
+        return toResponse(payment);
     }
 
     public List<PaymentResponse> list(Long householdId, String currentUserEmail) {
@@ -66,7 +69,7 @@ public class PaymentService {
         accessService.requireActiveMembership(currentUser.getId(), householdId);
 
         return paymentRepository.findByHouseholdId(householdId).stream()
-                .map(PaymentResponse::from)
+                .map(this::toResponse)
                 .toList();
     }
 
@@ -76,7 +79,7 @@ public class PaymentService {
 
         Payment payment = paymentRepository.findByIdAndHouseholdId(paymentId, householdId)
                 .orElseThrow(() -> new ResourceNotFoundException("Payment not found: " + paymentId));
-        return PaymentResponse.from(payment);
+        return toResponse(payment);
     }
 
     // Edit rules mirror create and delete:
@@ -108,7 +111,7 @@ public class PaymentService {
         User toUser = requireMember(householdId, request.toUserId());
 
         payment.update(fromUser, toUser, request.amount().setScale(2, RoundingMode.HALF_UP), request.note());
-        return PaymentResponse.from(payment);
+        return toResponse(payment);
     }
 
     public void delete(Long householdId, Long paymentId, String currentUserEmail) {
@@ -125,7 +128,15 @@ public class PaymentService {
             throw new ForbiddenActionException("Only the sender or a household admin can remove this payment");
         }
 
+        // Attachments point at this payment, so their rows and files go before the payment row.
+        attachmentService.deleteForPayment(payment.getId());
         paymentRepository.delete(payment);
+    }
+
+    // Builds the response including the attachment count (one count query per payment; lists are small).
+    private PaymentResponse toResponse(Payment payment) {
+        int attachmentCount = (int) attachmentRepository.countByPaymentId(payment.getId());
+        return PaymentResponse.from(payment, attachmentCount);
     }
 
     private User requireMember(Long householdId, Long userId) {

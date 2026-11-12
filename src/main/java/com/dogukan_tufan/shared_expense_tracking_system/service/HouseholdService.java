@@ -45,6 +45,7 @@ public class HouseholdService {
     private final CategorySplitDefaultRepository categorySplitDefaultRepository;
     private final InvitationRepository invitationRepository;
     private final HouseholdAccessService accessService;
+    private final AttachmentService attachmentService;
 
     public HouseholdResponse create(CreateHouseholdRequest request, String currentUserEmail) {
         User currentUser = getUser(currentUserEmail);
@@ -134,8 +135,10 @@ public class HouseholdService {
         }
 
         // Everything below holds a foreign key back to this household (ExpenseShare to its
-        // Expense, which holds one to the household), so the order matters: shares, then
-        // expenses, payments, category defaults and invitations, then memberships, then the household itself.
+        // Expense, which holds one to the household), so the order matters: attachments (rows and
+        // files) first, then shares, then expenses, payments, category defaults and invitations,
+        // then memberships, then the household itself.
+        attachmentService.deleteForHousehold(householdId);
         expenseShareRepository.deleteByExpenseHouseholdId(householdId);
         expenseRepository.deleteByHouseholdId(householdId);
         paymentRepository.deleteByHouseholdId(householdId);

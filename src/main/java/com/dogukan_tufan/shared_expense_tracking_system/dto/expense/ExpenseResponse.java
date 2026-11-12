@@ -22,12 +22,15 @@ public record ExpenseResponse(
         LocalDateTime expenseDate,
         Instant createdAt,
         SplitType splitType,
-        List<ShareResponse> shares
+        List<ShareResponse> shares,
+        // How many receipts/bills are attached (max 5). Lets the app show a paperclip on list cards
+        // without fetching the attachment list for every expense.
+        int attachmentCount
 ) {
 
-    // The shares are passed in (not loaded here) so the service can fetch them efficiently,
-    // e.g. all shares of a household in one query for the list endpoint.
-    public static ExpenseResponse from(Expense expense, List<ExpenseShare> shares) {
+    // The shares and the count are passed in (not loaded here) so the service can fetch them
+    // efficiently, e.g. all shares of a household in one query for the list endpoint.
+    public static ExpenseResponse from(Expense expense, List<ExpenseShare> shares, int attachmentCount) {
         return new ExpenseResponse(
                 expense.getId(),
                 expense.getHousehold().getId(),
@@ -40,6 +43,7 @@ public record ExpenseResponse(
                 expense.getExpenseDate(),
                 expense.getCreatedAt(),
                 expense.getSplitType(),
-                shares.stream().map(ShareResponse::from).toList());
+                shares.stream().map(ShareResponse::from).toList(),
+                attachmentCount);
     }
 }

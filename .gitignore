@@ -39,6 +39,9 @@ out/
 ### Environment ###
 .env
 
+### Uploaded attachment files (receipts, bills) -- personal data, never commit ###
+uploads/
+
 ### Personal notes (not part of the public repo) ###
 CLAUDE.md
 DEMO-KOPYA-KAGIDI.md

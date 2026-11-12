@@ -11,6 +11,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.time.Instant;
@@ -106,6 +107,14 @@ public class GlobalExceptionHandler {
                                                                   HttpServletRequest request) {
         return buildResponse(HttpStatus.METHOD_NOT_ALLOWED,
                 ex.getMethod() + " is not supported for " + request.getRequestURI(), request);
+    }
+
+    // Spring throws this when an uploaded file is bigger than spring.servlet.multipart.max-file-size
+    // (10 MB). 413 "Content Too Large" is the status for "your body is too big".
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ErrorResponse> handleFileTooLarge(MaxUploadSizeExceededException ex,
+                                                            HttpServletRequest request) {
+        return buildResponse(HttpStatus.CONTENT_TOO_LARGE, "File is too large (max 10 MB)", request);
     }
 
     @ExceptionHandler(Exception.class)

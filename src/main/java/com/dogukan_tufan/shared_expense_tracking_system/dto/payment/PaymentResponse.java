@@ -14,10 +14,12 @@ public record PaymentResponse(
         String toUserName,
         BigDecimal amount,
         String note,
-        Instant paidAt
+        Instant paidAt,
+        // How many transfer slips / proofs are attached (max 5), for the paperclip on list cards.
+        int attachmentCount
 ) {
 
-    public static PaymentResponse from(Payment payment) {
+    public static PaymentResponse from(Payment payment, int attachmentCount) {
         return new PaymentResponse(
                 payment.getId(),
                 payment.getHousehold().getId(),
@@ -27,6 +29,7 @@ public record PaymentResponse(
                 payment.getToUser().getName(),
                 payment.getAmount(),
                 payment.getNote(),
-                payment.getPaidAt());
+                payment.getPaidAt(),
+                attachmentCount);
     }
 }
