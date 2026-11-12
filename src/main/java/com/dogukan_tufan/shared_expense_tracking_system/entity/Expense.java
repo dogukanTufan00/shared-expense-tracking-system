@@ -54,9 +54,25 @@ public class Expense {
     @Column
     private String description;
 
+    // Only the LAST expense of a recurring chain has recurring=true. When RecurringExpenseService
+    // generates the next month, it moves the flag to the new copy. One flag on one row means there
+    // is exactly one place that decides "does this chain still repeat", and no duplicate generation.
     @Setter
     @Column(nullable = false)
     private boolean recurring;
+
+    // Day of month the chain repeats on, copied from the FIRST expense of the chain. Keeping it
+    // fixed (instead of reading each copy's date) stops drift: 31 Jan -> 28 Feb -> 31 Mar.
+    // Null for ordinary expenses and for rows created before this column existed.
+    @Setter
+    @Column(name = "recurrence_day")
+    private Integer recurrenceDay;
+
+    // The expense this one was copied from by the recurring job. Null for expenses a user created.
+    @Setter
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "generated_from_id")
+    private Expense generatedFrom;
 
     @Setter
     @Column(name = "expense_date", nullable = false)

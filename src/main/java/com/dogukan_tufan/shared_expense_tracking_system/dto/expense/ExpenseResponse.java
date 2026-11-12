@@ -25,7 +25,11 @@ public record ExpenseResponse(
         List<ShareResponse> shares,
         // How many receipts/bills are attached (max 5). Lets the app show a paperclip on list cards
         // without fetching the attachment list for every expense.
-        int attachmentCount
+        int attachmentCount,
+        // Id of the expense this one was generated from by the recurring job. Null for manual expenses.
+        Long generatedFromId,
+        // Day of month of the recurring chain (null when the expense was never part of a chain).
+        Integer recurrenceDay
 ) {
 
     // The shares and the count are passed in (not loaded here) so the service can fetch them
@@ -44,6 +48,8 @@ public record ExpenseResponse(
                 expense.getCreatedAt(),
                 expense.getSplitType(),
                 shares.stream().map(ShareResponse::from).toList(),
-                attachmentCount);
+                attachmentCount,
+                expense.getGeneratedFrom() == null ? null : expense.getGeneratedFrom().getId(),
+                expense.getRecurrenceDay());
     }
 }

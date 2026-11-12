@@ -12,6 +12,7 @@ import com.dogukan_tufan.shared_expense_tracking_system.entity.MembershipRole;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.SplitType;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.User;
 import com.dogukan_tufan.shared_expense_tracking_system.exception.BadRequestException;
+import com.dogukan_tufan.shared_expense_tracking_system.exception.ConflictException;
 import com.dogukan_tufan.shared_expense_tracking_system.exception.ForbiddenActionException;
 import com.dogukan_tufan.shared_expense_tracking_system.exception.ResourceNotFoundException;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.AttachmentRepository;
@@ -21,11 +22,13 @@ import com.dogukan_tufan.shared_expense_tracking_system.repository.ExpenseShareR
 import com.dogukan_tufan.shared_expense_tracking_system.repository.MembershipRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -48,6 +51,7 @@ public class ExpenseService {
     private final ShareValidator shareValidator;
     private final AttachmentRepository attachmentRepository;
     private final AttachmentService attachmentService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public ExpenseResponse create(Long householdId, ExpenseRequest request, String currentUserEmail) {
         User currentUser = getUser(currentUserEmail);
@@ -68,10 +72,15 @@ public class ExpenseService {
                 request.recurring(),
                 request.expenseDate());
         expense.setSplitType(plan.splitType());
+        ensureRecurrenceDay(expense);
         expenseRepository.save(expense);
 
         List<ExpenseShare> shares = recalculateShares(expense, plan.shares());
 
+        if (expense.isRecurring()) {
+            // Due months are filled in right after this transaction commits (see the event class).
+            eventPublisher.publishEvent(new RecurringExpenseSavedEvent(expense.getId()));
+        }
         return toResponse(expense, shares);
     }
 
@@ -111,6 +120,13 @@ public class ExpenseService {
         // and reads the old shares, so the expense must still hold its old values at this point.
         SplitPlan plan = planForUpdate(householdId, expense, request, newAmount);
 
+        // Why: an expense that already has a generated copy is not the end of its chain. Turning
+        // recurring on here would start a second chain next to the first one (double charges).
+        if (request.recurring() && !expense.isRecurring()
+                && expenseRepository.existsByGeneratedFromId(expense.getId())) {
+            throw new ConflictException("This expense already repeats; turn recurring on the latest one instead");
+        }
+
         expense.setPaidBy(payerMembership.getUser());
         expense.setAmount(newAmount);
         expense.setCategory(request.category());
@@ -118,9 +134,14 @@ public class ExpenseService {
         expense.setRecurring(request.recurring());
         expense.setExpenseDate(request.expenseDate());
         expense.setSplitType(plan.splitType());
+        ensureRecurrenceDay(expense);
 
         List<ExpenseShare> shares = recalculateShares(expense, plan.shares());
 
+        if (expense.isRecurring()) {
+            // Due months are filled in right after this transaction commits (see the event class).
+            eventPublisher.publishEvent(new RecurringExpenseSavedEvent(expense.getId()));
+        }
         return toResponse(expense, shares);
     }
 
@@ -133,8 +154,70 @@ public class ExpenseService {
 
         // Attachments point at this expense too, so their rows and files go first. Then the shares.
         attachmentService.deleteForExpense(expense.getId());
+        // Expenses generated from this one point at it, so unlink them first (foreign key).
+        expenseRepository.clearGeneratedFrom(expense);
         expenseShareRepository.deleteByExpenseId(expense.getId());
         expenseRepository.delete(expense);
+    }
+
+    // ---------- Recurring copies (called by RecurringExpenseService, one month at a time) ----------
+
+    // Creates the next month of a recurring chain from `previous`. The copy takes over the recurring
+    // flag, so `previous` stops repeating. Its split is the previous one when those people are still
+    // active members; otherwise the normal default rules apply (see planForRecurringCopy).
+    public Expense createRecurringCopy(Expense previous, LocalDateTime nextDate) {
+        Long householdId = previous.getHousehold().getId();
+        BigDecimal amount = previous.getAmount();
+        List<ExpenseShare> previousShares = expenseShareRepository.findByExpenseId(previous.getId());
+        SplitPlan plan = planForRecurringCopy(householdId, previous, previousShares, amount);
+
+        previous.setRecurring(false);
+        Expense copy = new Expense(
+                previous.getHousehold(),
+                previous.getPaidBy(),
+                amount,
+                previous.getCategory(),
+                previous.getDescription(),
+                true,
+                nextDate);
+        copy.setSplitType(plan.splitType());
+        copy.setRecurrenceDay(previous.getRecurrenceDay());
+        copy.setGeneratedFrom(previous);
+        expenseRepository.save(copy);
+
+        recalculateShares(copy, plan.shares());
+        return copy;
+    }
+
+    // Reuse the previous split only when every person in it is still an active member. Otherwise an
+    // old split would charge people who never agreed to it (or leave out the new roommate), so we
+    // fall back to the same default rules a brand new expense would get.
+    private SplitPlan planForRecurringCopy(Long householdId, Expense previous, List<ExpenseShare> previousShares,
+                                           BigDecimal amount) {
+        Set<Long> activeUserIds = activeMemberUsers(householdId).stream()
+                .map(User::getId)
+                .collect(Collectors.toSet());
+        boolean samePeopleStillHere = !previousShares.isEmpty()
+                && previousShares.stream().allMatch(share -> activeUserIds.contains(share.getUser().getId()));
+        if (!samePeopleStillHere) {
+            return defaultPlan(householdId, previous.getCategory(), amount);
+        }
+
+        List<User> users = previousShares.stream().map(ExpenseShare::getUser).toList();
+        return switch (previous.getSplitType()) {
+            case EQUAL -> new SplitPlan(SplitType.EQUAL, equalShares(users, amount));
+            case PERCENT -> new SplitPlan(SplitType.PERCENT, percentShares(users,
+                    previousShares.stream().map(ExpenseShare::getPercent).toList(), amount));
+            case AMOUNT -> new SplitPlan(SplitType.AMOUNT, amountShares(users,
+                    previousShares.stream().map(ExpenseShare::getOwedAmount).toList()));
+        };
+    }
+
+    // Remembers the day of month the chain repeats on. Set once from the first expense; edits keep it.
+    private void ensureRecurrenceDay(Expense expense) {
+        if (expense.isRecurring() && expense.getRecurrenceDay() == null) {
+            expense.setRecurrenceDay(expense.getExpenseDate().getDayOfMonth());
+        }
     }
 
     // ---------- Deciding the split (no database writes in this section) ----------

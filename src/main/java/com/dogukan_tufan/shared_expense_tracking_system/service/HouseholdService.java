@@ -140,6 +140,9 @@ public class HouseholdService {
         // then memberships, then the household itself.
         attachmentService.deleteForHousehold(householdId);
         expenseShareRepository.deleteByExpenseHouseholdId(householdId);
+        // Expenses generated from others point at each other (generated_from), so unlink them
+        // before the rows are deleted, otherwise the delete order could break the foreign key.
+        expenseRepository.clearGeneratedFromForHousehold(householdId);
         expenseRepository.deleteByHouseholdId(householdId);
         paymentRepository.deleteByHouseholdId(householdId);
         categorySplitDefaultRepository.deleteByHouseholdId(householdId);
