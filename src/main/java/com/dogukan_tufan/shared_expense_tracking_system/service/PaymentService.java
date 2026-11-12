@@ -54,7 +54,8 @@ public class PaymentService {
                 requesterMembership.getHousehold(),
                 fromUser,
                 toUser,
-                request.amount().setScale(2, RoundingMode.HALF_UP));
+                request.amount().setScale(2, RoundingMode.HALF_UP),
+                request.note());
         paymentRepository.save(payment);
 
         return PaymentResponse.from(payment);
@@ -67,6 +68,47 @@ public class PaymentService {
         return paymentRepository.findByHouseholdId(householdId).stream()
                 .map(PaymentResponse::from)
                 .toList();
+    }
+
+    public PaymentResponse getById(Long householdId, Long paymentId, String currentUserEmail) {
+        User currentUser = getUser(currentUserEmail);
+        accessService.requireActiveMembership(currentUser.getId(), householdId);
+
+        Payment payment = paymentRepository.findByIdAndHouseholdId(paymentId, householdId)
+                .orElseThrow(() -> new ResourceNotFoundException("Payment not found: " + paymentId));
+        return PaymentResponse.from(payment);
+    }
+
+    // Edit rules mirror create and delete:
+    // - only the original sender or an admin may edit (a plain member cannot rewrite someone else's payment);
+    // - a non-admin cannot hand the payment to someone else: the new sender must be the requester too,
+    //   otherwise a member could use edit to make other people look like they paid.
+    // paidAt is not touched (Payment.update does not change it), so the original payment time is kept.
+    public PaymentResponse update(Long householdId, Long paymentId, PaymentRequest request, String currentUserEmail) {
+        User currentUser = getUser(currentUserEmail);
+        Membership requesterMembership = accessService.requireActiveMembership(currentUser.getId(), householdId);
+
+        Payment payment = paymentRepository.findByIdAndHouseholdId(paymentId, householdId)
+                .orElseThrow(() -> new ResourceNotFoundException("Payment not found: " + paymentId));
+
+        boolean isOriginalSender = payment.getFromUser().getId().equals(currentUser.getId());
+        boolean isAdmin = requesterMembership.getRole() == MembershipRole.ADMIN;
+        if (!isOriginalSender && !isAdmin) {
+            throw new ForbiddenActionException("Only the sender or a household admin can edit this payment");
+        }
+        if (!isAdmin && !request.fromUserId().equals(currentUser.getId())) {
+            throw new ForbiddenActionException("Only a household admin can change the sender to another member");
+        }
+
+        if (request.fromUserId().equals(request.toUserId())) {
+            throw new BadRequestException("fromUserId and toUserId must be different");
+        }
+
+        User fromUser = requireMember(householdId, request.fromUserId());
+        User toUser = requireMember(householdId, request.toUserId());
+
+        payment.update(fromUser, toUser, request.amount().setScale(2, RoundingMode.HALF_UP), request.note());
+        return PaymentResponse.from(payment);
     }
 
     public void delete(Long householdId, Long paymentId, String currentUserEmail) {

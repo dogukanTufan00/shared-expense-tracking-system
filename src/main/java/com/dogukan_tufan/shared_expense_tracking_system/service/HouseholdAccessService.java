@@ -28,4 +28,17 @@ public class HouseholdAccessService {
             throw new ForbiddenActionException("Only an admin of this household can do that");
         }
     }
+
+    // Founder protection: while the founder is still an active member, nobody else may change
+    // their role or remove them. Callers must pass an ACTIVE target membership (they look it up
+    // first), so "target is the founder" already implies the founder is still living here.
+    // If the founder has left, the lookup fails with 404 before this check runs -- which is the
+    // point: a house must not stay locked to someone who moved out, so all admins are equal then.
+    public void requireFounderProtectionAllows(Membership target, Long actingUserId) {
+        Long targetUserId = target.getUser().getId();
+        boolean targetIsFounder = target.getHousehold().getCreatedBy().getId().equals(targetUserId);
+        if (targetIsFounder && !actingUserId.equals(targetUserId)) {
+            throw new ForbiddenActionException("The household founder can only be changed by the founder");
+        }
+    }
 }

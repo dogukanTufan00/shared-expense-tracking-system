@@ -24,6 +24,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
+    private final IbanValidator ibanValidator;
 
     public UserResponse register(RegisterRequest request) {
         if (userRepository.existsByEmail(request.email())) {
@@ -31,7 +32,7 @@ public class AuthService {
         }
 
         User user = new User(request.name(), request.email(), passwordEncoder.encode(request.password()));
-        user.setIban(request.iban());
+        user.setIban(ibanValidator.normalize(request.iban()));
 
         User saved = userRepository.save(user);
         return UserResponse.from(saved);

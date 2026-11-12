@@ -9,6 +9,8 @@ public record SettlementResponse(
         String fromName,
         Long toUserId,
         String toName,
+        // The creditor's IBAN, so the app can show a copy button. Null if they have not added one.
+        String toIban,
         BigDecimal amount
 ) {
 }

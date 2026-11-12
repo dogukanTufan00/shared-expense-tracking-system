@@ -4,9 +4,11 @@ import com.dogukan_tufan.shared_expense_tracking_system.dto.balance.BalanceRespo
 import com.dogukan_tufan.shared_expense_tracking_system.dto.balance.SettlementResponse;
 import com.dogukan_tufan.shared_expense_tracking_system.dto.household.CreateHouseholdRequest;
 import com.dogukan_tufan.shared_expense_tracking_system.dto.household.HouseholdResponse;
+import com.dogukan_tufan.shared_expense_tracking_system.dto.household.TransferOwnershipRequest;
 import com.dogukan_tufan.shared_expense_tracking_system.dto.household.UpdateHouseholdRequest;
 import com.dogukan_tufan.shared_expense_tracking_system.service.BalanceService;
 import com.dogukan_tufan.shared_expense_tracking_system.service.HouseholdService;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -63,6 +65,16 @@ public class HouseholdController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable Long id, Authentication authentication) {
         householdService.delete(id, authentication.getName());
+    }
+
+    // POST here is a "do this action" call, not a creation, so the response is 200 with the
+    // updated household (not 201).
+    @PostMapping("/{id}/transfer-ownership")
+    @Operation(summary = "Transfer the founder role to another active member (founder only)")
+    public HouseholdResponse transferOwnership(@PathVariable Long id,
+                                               @Valid @RequestBody TransferOwnershipRequest request,
+                                               Authentication authentication) {
+        return householdService.transferOwnership(id, request, authentication.getName());
     }
 
     @GetMapping("/{id}/balances")

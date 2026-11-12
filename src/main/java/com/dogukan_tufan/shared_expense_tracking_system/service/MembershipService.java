@@ -1,6 +1,7 @@
 package com.dogukan_tufan.shared_expense_tracking_system.service;
 
 import com.dogukan_tufan.shared_expense_tracking_system.dto.household.MemberResponse;
+import com.dogukan_tufan.shared_expense_tracking_system.dto.household.UpdateMemberRoleRequest;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.Membership;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.MembershipRole;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.User;
@@ -34,7 +35,40 @@ public class MembershipService {
                 .toList();
     }
 
+    // Removing someone else is an admin action. Leaving (userId == your own id) is a member's own
+    // choice, so no admin role is needed. Their debts stay in the balances after they leave, because
+    // leaving is only a soft delete (leftAt is set and the row is kept).
     public void removeMember(Long householdId, Long targetUserId, String currentUserEmail) {
+        User currentUser = getUser(currentUserEmail);
+        Membership requesterMembership = accessService.requireActiveMembership(currentUser.getId(), householdId);
+        boolean isLeaving = currentUser.getId().equals(targetUserId);
+        if (!isLeaving) {
+            accessService.requireAdmin(requesterMembership);
+        }
+
+        Membership targetMembership = membershipRepository
+                .findByUserIdAndHouseholdIdAndLeftAtIsNull(targetUserId, householdId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "No active member with user id " + targetUserId + " in this household"));
+
+        accessService.requireFounderProtectionAllows(targetMembership, currentUser.getId());
+
+        // Without at least one admin, nobody could add/rename/delete the household anymore.
+        if (targetMembership.getRole() == MembershipRole.ADMIN
+                && membershipRepository.countByHouseholdIdAndRoleAndLeftAtIsNull(householdId, MembershipRole.ADMIN) <= 1) {
+            throw new ConflictException(isLeaving
+                    ? "The last admin cannot leave; make someone else admin first"
+                    : "The last admin of a household cannot be removed");
+        }
+
+        // Soft delete: leftAt set, row kept. Past expenses still point at a real Membership/User.
+        targetMembership.setLeftAt(Instant.now());
+    }
+
+    // Promote or demote a member. Admin rights can be shared this way: promote someone else, then
+    // the old admin can demote themselves or leave. Full founder handover is HouseholdService.transferOwnership.
+    public MemberResponse changeRole(Long householdId, Long targetUserId, UpdateMemberRoleRequest request,
+                                     String currentUserEmail) {
         User currentUser = getUser(currentUserEmail);
         Membership requesterMembership = accessService.requireActiveMembership(currentUser.getId(), householdId);
         accessService.requireAdmin(requesterMembership);
@@ -44,14 +78,21 @@ public class MembershipService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "No active member with user id " + targetUserId + " in this household"));
 
-        // Without at least one admin, nobody could add/rename/delete the household anymore.
-        if (targetMembership.getRole() == MembershipRole.ADMIN
-                && membershipRepository.countByHouseholdIdAndRoleAndLeftAtIsNull(householdId, MembershipRole.ADMIN) <= 1) {
-            throw new ConflictException("The last admin of a household cannot be removed");
+        accessService.requireFounderProtectionAllows(targetMembership, currentUser.getId());
+
+        // Same role requested (including promoting an existing admin): nothing to change, still 200.
+        if (targetMembership.getRole() == request.role()) {
+            return MemberResponse.from(targetMembership);
         }
 
-        // Soft delete: leftAt set, row kept. Past expenses still point at a real Membership/User.
-        targetMembership.setLeftAt(Instant.now());
+        // Demoting the only admin would leave the household without anyone who can manage it.
+        if (targetMembership.getRole() == MembershipRole.ADMIN
+                && membershipRepository.countByHouseholdIdAndRoleAndLeftAtIsNull(householdId, MembershipRole.ADMIN) <= 1) {
+            throw new ConflictException("The last admin of a household cannot be demoted; make someone else admin first");
+        }
+
+        targetMembership.setRole(request.role());
+        return MemberResponse.from(targetMembership);
     }
 
     private User getUser(String email) {

@@ -17,8 +17,8 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 // A real-world repayment from one member to another (e.g. "Ayse paid Dogukan 50 TL back").
-// No setters anywhere: a payment is an append-only ledger entry, like a bank transaction -- you
-// don't edit history, you remove a mistaken one (PaymentService.delete) or record a correction.
+// No setters anywhere: changes go through update(...) below, which is the only place a payment's
+// details can change. That keeps the edit rules in one explicit spot instead of scattered setters.
 @Entity
 @Table(name = "payments")
 @Getter
@@ -47,11 +47,25 @@ public class Payment {
     @Column(name = "paid_at", nullable = false, updatable = false)
     private Instant paidAt;
 
-    public Payment(Household household, User fromUser, User toUser, BigDecimal amount) {
+    // Optional free text such as "sent via FAST". Nullable on purpose: most payments have no note.
+    @Column(length = 200)
+    private String note;
+
+    public Payment(Household household, User fromUser, User toUser, BigDecimal amount, String note) {
         this.household = household;
         this.fromUser = fromUser;
         this.toUser = toUser;
         this.amount = amount;
+        this.note = note;
         this.paidAt = Instant.now();
+    }
+
+    // Edits the payment in place. paidAt and household are deliberately NOT changed: the time the
+    // money actually moved stays what it was, and a payment cannot be moved to another household.
+    public void update(User fromUser, User toUser, BigDecimal amount, String note) {
+        this.fromUser = fromUser;
+        this.toUser = toUser;
+        this.amount = amount;
+        this.note = note;
     }
 }

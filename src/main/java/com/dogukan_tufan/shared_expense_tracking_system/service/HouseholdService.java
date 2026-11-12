@@ -2,11 +2,14 @@ package com.dogukan_tufan.shared_expense_tracking_system.service;
 
 import com.dogukan_tufan.shared_expense_tracking_system.dto.household.CreateHouseholdRequest;
 import com.dogukan_tufan.shared_expense_tracking_system.dto.household.HouseholdResponse;
+import com.dogukan_tufan.shared_expense_tracking_system.dto.household.TransferOwnershipRequest;
 import com.dogukan_tufan.shared_expense_tracking_system.dto.household.UpdateHouseholdRequest;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.Household;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.Membership;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.MembershipRole;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.User;
+import com.dogukan_tufan.shared_expense_tracking_system.exception.BadRequestException;
+import com.dogukan_tufan.shared_expense_tracking_system.exception.ForbiddenActionException;
 import com.dogukan_tufan.shared_expense_tracking_system.exception.ResourceNotFoundException;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.CategorySplitDefaultRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.ExpenseRepository;
@@ -82,10 +85,53 @@ public class HouseholdService {
         return HouseholdResponse.from(household);
     }
 
+    // Hands the founder role to another active member. Only the current founder can do this.
+    // The new founder must be an ADMIN (a founder who cannot manage the house makes no sense), so
+    // we promote them in the same transaction. The old founder stays ADMIN; they can demote
+    // themselves afterwards (the last-admin rule still protects the house).
+    public HouseholdResponse transferOwnership(Long householdId, TransferOwnershipRequest request,
+                                               String currentUserEmail) {
+        User currentUser = getUser(currentUserEmail);
+        Membership membership = accessService.requireActiveMembership(currentUser.getId(), householdId);
+        Household household = membership.getHousehold();
+
+        if (!household.getCreatedBy().getId().equals(currentUser.getId())) {
+            throw new ForbiddenActionException("Only the founder can transfer ownership");
+        }
+        if (request.userId().equals(currentUser.getId())) {
+            throw new BadRequestException("You are already the founder");
+        }
+
+        Membership newFounderMembership = membershipRepository
+                .findByUserIdAndHouseholdIdAndLeftAtIsNull(request.userId(), householdId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "No active member with user id " + request.userId() + " in this household"));
+
+        if (newFounderMembership.getRole() != MembershipRole.ADMIN) {
+            newFounderMembership.setRole(MembershipRole.ADMIN);
+        }
+        household.setCreatedBy(newFounderMembership.getUser());
+
+        return HouseholdResponse.from(household);
+    }
+
     public void delete(Long householdId, String currentUserEmail) {
         User currentUser = getUser(currentUserEmail);
         Membership membership = accessService.requireActiveMembership(currentUser.getId(), householdId);
-        accessService.requireAdmin(membership);
+        // Deleting wipes the whole history for everyone, so while the founder still lives here it
+        // is their call alone -- even if they stepped down as admin (otherwise nobody could delete
+        // the home). If the founder has moved out, any admin may delete (same rule as founder
+        // protection: the house must not stay locked to someone who left).
+        Long founderId = membership.getHousehold().getCreatedBy().getId();
+        boolean founderActive = membershipRepository
+                .findByUserIdAndHouseholdIdAndLeftAtIsNull(founderId, householdId).isPresent();
+        if (founderActive) {
+            if (!founderId.equals(currentUser.getId())) {
+                throw new ForbiddenActionException("Only the household founder can delete the household");
+            }
+        } else {
+            accessService.requireAdmin(membership);
+        }
 
         // Everything below holds a foreign key back to this household (ExpenseShare to its
         // Expense, which holds one to the household), so the order matters: shares, then

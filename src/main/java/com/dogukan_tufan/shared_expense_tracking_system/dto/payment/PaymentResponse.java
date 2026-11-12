@@ -13,6 +13,7 @@ public record PaymentResponse(
         Long toUserId,
         String toUserName,
         BigDecimal amount,
+        String note,
         Instant paidAt
 ) {
 
@@ -25,6 +26,7 @@ public record PaymentResponse(
                 payment.getToUser().getId(),
                 payment.getToUser().getName(),
                 payment.getAmount(),
+                payment.getNote(),
                 payment.getPaidAt());
     }
 }

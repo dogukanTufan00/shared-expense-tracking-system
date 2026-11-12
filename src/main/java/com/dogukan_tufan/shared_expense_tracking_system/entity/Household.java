@@ -30,6 +30,9 @@ public class Household {
     @Column(nullable = false)
     private String name;
 
+    // Despite the column name, this now means the current founder/owner. It changes when the
+    // founder transfers ownership (HouseholdService.transferOwnership), so it is not "original creator" only.
+    @Setter
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by", nullable = false)
     private User createdBy;

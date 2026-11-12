@@ -129,7 +129,8 @@ public class BalanceService {
             BigDecimal amount = debtLeft[d].min(creditLeft[c]);
             BalanceResponse from = debtors.get(d);
             BalanceResponse to = creditors.get(c);
-            settlements.add(new SettlementResponse(from.userId(), from.name(), to.userId(), to.name(), amount));
+            String toIban = userRepository.findById(to.userId()).map(User::getIban).orElse(null);
+            settlements.add(new SettlementResponse(from.userId(), from.name(), to.userId(), to.name(), toIban, amount));
 
             debtLeft[d] = debtLeft[d].subtract(amount);
             creditLeft[c] = creditLeft[c].subtract(amount);
