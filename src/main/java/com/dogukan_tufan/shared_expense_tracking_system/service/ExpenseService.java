@@ -11,6 +11,8 @@ import com.dogukan_tufan.shared_expense_tracking_system.entity.Membership;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.MembershipRole;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.SplitType;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.User;
+import com.dogukan_tufan.shared_expense_tracking_system.event.ExpenseAddedEvent;
+import com.dogukan_tufan.shared_expense_tracking_system.event.RecurringExpenseGeneratedEvent;
 import com.dogukan_tufan.shared_expense_tracking_system.exception.BadRequestException;
 import com.dogukan_tufan.shared_expense_tracking_system.exception.ConflictException;
 import com.dogukan_tufan.shared_expense_tracking_system.exception.ForbiddenActionException;
@@ -76,6 +78,9 @@ public class ExpenseService {
         expenseRepository.save(expense);
 
         List<ExpenseShare> shares = recalculateShares(expense, plan.shares());
+
+        // Only for a real new expense (never for generated copies). NotificationService sends it after commit.
+        eventPublisher.publishEvent(new ExpenseAddedEvent(expense.getId(), currentUser.getId()));
 
         if (expense.isRecurring()) {
             // Due months are filled in right after this transaction commits (see the event class).
@@ -186,6 +191,7 @@ public class ExpenseService {
         expenseRepository.save(copy);
 
         recalculateShares(copy, plan.shares());
+        eventPublisher.publishEvent(new RecurringExpenseGeneratedEvent(copy.getId()));
         return copy;
     }
 

@@ -6,6 +6,7 @@ import com.dogukan_tufan.shared_expense_tracking_system.entity.Membership;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.MembershipRole;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.Payment;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.User;
+import com.dogukan_tufan.shared_expense_tracking_system.event.PaymentRecordedEvent;
 import com.dogukan_tufan.shared_expense_tracking_system.exception.BadRequestException;
 import com.dogukan_tufan.shared_expense_tracking_system.exception.ForbiddenActionException;
 import com.dogukan_tufan.shared_expense_tracking_system.exception.ResourceNotFoundException;
@@ -14,6 +15,7 @@ import com.dogukan_tufan.shared_expense_tracking_system.repository.MembershipRep
 import com.dogukan_tufan.shared_expense_tracking_system.repository.PaymentRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +33,7 @@ public class PaymentService {
     private final HouseholdAccessService accessService;
     private final AttachmentRepository attachmentRepository;
     private final AttachmentService attachmentService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public PaymentResponse create(Long householdId, PaymentRequest request, String currentUserEmail) {
         User currentUser = getUser(currentUserEmail);
@@ -60,6 +63,7 @@ public class PaymentService {
                 request.amount().setScale(2, RoundingMode.HALF_UP),
                 request.note());
         paymentRepository.save(payment);
+        eventPublisher.publishEvent(new PaymentRecordedEvent(payment.getId(), currentUser.getId()));
 
         return toResponse(payment);
     }

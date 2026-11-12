@@ -8,12 +8,15 @@ import com.dogukan_tufan.shared_expense_tracking_system.entity.InvitationStatus;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.Membership;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.MembershipRole;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.User;
+import com.dogukan_tufan.shared_expense_tracking_system.event.InvitationAcceptedEvent;
+import com.dogukan_tufan.shared_expense_tracking_system.event.InvitationSentEvent;
 import com.dogukan_tufan.shared_expense_tracking_system.exception.ConflictException;
 import com.dogukan_tufan.shared_expense_tracking_system.exception.ResourceNotFoundException;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.InvitationRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.MembershipRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +36,7 @@ public class InvitationService {
     private final MembershipRepository membershipRepository;
     private final InvitationRepository invitationRepository;
     private final HouseholdAccessService accessService;
+    private final ApplicationEventPublisher eventPublisher;
 
     // ADMIN only. Creates a PENDING invitation; no Membership is created yet.
     public InvitationResponse invite(Long householdId, InviteRequest request, String currentUserEmail) {
@@ -68,6 +72,7 @@ public class InvitationService {
 
         Invitation invitation = new Invitation(requesterMembership.getHousehold(), target, currentUser);
         invitationRepository.save(invitation);
+        eventPublisher.publishEvent(new InvitationSentEvent(invitation.getId()));
 
         return InvitationResponse.from(invitation);
     }
@@ -135,6 +140,7 @@ public class InvitationService {
 
         invitation.setStatus(InvitationStatus.ACCEPTED);
         invitation.setRespondedAt(Instant.now());
+        eventPublisher.publishEvent(new InvitationAcceptedEvent(invitation.getId()));
 
         return HouseholdResponse.from(invitation.getHousehold());
     }

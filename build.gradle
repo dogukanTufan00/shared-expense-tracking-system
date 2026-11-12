@@ -37,6 +37,10 @@ dependencies {
 	// Swagger UI (springdoc-openapi 3.1.1: compatible with Spring Boot 4.1.x / Spring Framework 7)
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1'
 
+	// Firebase Admin SDK 9.12.0 (latest stable): sends push notifications through Firebase Cloud Messaging.
+	// Optional at runtime: without FIREBASE_CREDENTIALS the app runs and simply skips pushes.
+	implementation 'com.google.firebase:firebase-admin:9.12.0'
+
 	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'

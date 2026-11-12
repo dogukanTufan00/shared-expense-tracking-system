@@ -1,6 +1,8 @@
 package com.dogukan_tufan.shared_expense_tracking_system.controller;
 
 import com.dogukan_tufan.shared_expense_tracking_system.dto.auth.UserResponse;
+import com.dogukan_tufan.shared_expense_tracking_system.dto.device.RegisterDeviceRequest;
+import com.dogukan_tufan.shared_expense_tracking_system.dto.device.UnregisterDeviceRequest;
 import com.dogukan_tufan.shared_expense_tracking_system.dto.user.ChangePasswordRequest;
 import com.dogukan_tufan.shared_expense_tracking_system.dto.user.UpdateProfileRequest;
 import com.dogukan_tufan.shared_expense_tracking_system.service.UserService;
@@ -9,6 +11,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -39,5 +42,19 @@ public class UserController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void changePassword(@Valid @RequestBody ChangePasswordRequest request, Authentication authentication) {
         userService.changePassword(authentication.getName(), request);
+    }
+
+    // Push token registration. PUT because the call is idempotent: sending it again just updates the row.
+    @PutMapping("/devices")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void registerDevice(@Valid @RequestBody RegisterDeviceRequest request, Authentication authentication) {
+        userService.registerDevice(authentication.getName(), request);
+    }
+
+    // Called on logout. DELETE with a body (not a path variable) keeps the token out of the URL.
+    @DeleteMapping("/devices")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void unregisterDevice(@Valid @RequestBody UnregisterDeviceRequest request, Authentication authentication) {
+        userService.unregisterDevice(authentication.getName(), request.token());
     }
 }

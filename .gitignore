@@ -42,6 +42,10 @@ out/
 ### Uploaded attachment files (receipts, bills) -- personal data, never commit ###
 uploads/
 
+### Firebase service-account key (secret) -- safety net; the key is kept outside the repo ###
+*firebase-adminsdk*.json
+firebase-gizli/
+
 ### Personal notes (not part of the public repo) ###
 CLAUDE.md
 DEMO-KOPYA-KAGIDI.md

@@ -26,3 +26,7 @@ app:
   uploads:
     # Folder for attachment files. Relative paths are resolved from the folder the app is started in.
     dir: ${UPLOADS_DIR:./uploads}
+  firebase:
+    # Path to the Firebase service-account key file. Set it ONLY through the environment variable.
+    # Empty (default) = push notifications disabled; in-app notifications still work.
+    credentials-path: ${FIREBASE_CREDENTIALS:}

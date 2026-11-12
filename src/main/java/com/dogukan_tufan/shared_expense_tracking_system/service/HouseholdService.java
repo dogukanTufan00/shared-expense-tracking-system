@@ -17,6 +17,7 @@ import com.dogukan_tufan.shared_expense_tracking_system.repository.ExpenseShareR
 import com.dogukan_tufan.shared_expense_tracking_system.repository.HouseholdRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.InvitationRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.MembershipRepository;
+import com.dogukan_tufan.shared_expense_tracking_system.repository.NotificationRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.PaymentRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -46,6 +47,7 @@ public class HouseholdService {
     private final InvitationRepository invitationRepository;
     private final HouseholdAccessService accessService;
     private final AttachmentService attachmentService;
+    private final NotificationRepository notificationRepository;
 
     public HouseholdResponse create(CreateHouseholdRequest request, String currentUserEmail) {
         User currentUser = getUser(currentUserEmail);
@@ -147,6 +149,10 @@ public class HouseholdService {
         paymentRepository.deleteByHouseholdId(householdId);
         categorySplitDefaultRepository.deleteByHouseholdId(householdId);
         invitationRepository.deleteByHouseholdId(householdId);
+        // Notifications only point at the household (nullable link). They are deleted rather than
+        // unlinked: the household is gone, so its notices would have no working target, and deleting
+        // is simpler than keeping rows that show a household name with no household behind them.
+        notificationRepository.deleteByHouseholdId(householdId);
         membershipRepository.deleteByHouseholdId(householdId);
         householdRepository.delete(membership.getHousehold());
     }
