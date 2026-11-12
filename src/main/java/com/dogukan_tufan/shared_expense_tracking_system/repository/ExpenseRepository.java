@@ -8,12 +8,18 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
 public interface ExpenseRepository extends JpaRepository<Expense, Long> {
 
     List<Expense> findByHouseholdId(Long householdId);
+
+    // Expenses whose expenseDate is in [start, end). The statement passes midnight of the first day
+    // and midnight of the day AFTER the last day, so both ends of the period are included exactly once.
+    List<Expense> findByHouseholdIdAndExpenseDateGreaterThanEqualAndExpenseDateLessThan(
+            Long householdId, LocalDateTime start, LocalDateTime end);
 
     // Scoped by householdId too, so a valid expense id from another household can't be read/edited through this path.
     Optional<Expense> findByIdAndHouseholdId(Long id, Long householdId);
