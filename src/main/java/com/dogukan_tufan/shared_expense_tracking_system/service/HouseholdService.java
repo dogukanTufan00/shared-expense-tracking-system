@@ -12,6 +12,7 @@ import com.dogukan_tufan.shared_expense_tracking_system.repository.CategorySplit
 import com.dogukan_tufan.shared_expense_tracking_system.repository.ExpenseRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.ExpenseShareRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.HouseholdRepository;
+import com.dogukan_tufan.shared_expense_tracking_system.repository.InvitationRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.MembershipRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.PaymentRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.UserRepository;
@@ -39,6 +40,7 @@ public class HouseholdService {
     private final ExpenseShareRepository expenseShareRepository;
     private final PaymentRepository paymentRepository;
     private final CategorySplitDefaultRepository categorySplitDefaultRepository;
+    private final InvitationRepository invitationRepository;
     private final HouseholdAccessService accessService;
 
     public HouseholdResponse create(CreateHouseholdRequest request, String currentUserEmail) {
@@ -87,11 +89,12 @@ public class HouseholdService {
 
         // Everything below holds a foreign key back to this household (ExpenseShare to its
         // Expense, which holds one to the household), so the order matters: shares, then
-        // expenses, payments and category defaults, then memberships, then the household itself.
+        // expenses, payments, category defaults and invitations, then memberships, then the household itself.
         expenseShareRepository.deleteByExpenseHouseholdId(householdId);
         expenseRepository.deleteByHouseholdId(householdId);
         paymentRepository.deleteByHouseholdId(householdId);
         categorySplitDefaultRepository.deleteByHouseholdId(householdId);
+        invitationRepository.deleteByHouseholdId(householdId);
         membershipRepository.deleteByHouseholdId(householdId);
         householdRepository.delete(membership.getHousehold());
     }

@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -96,6 +97,15 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ErrorResponse> handleNoResourceFound(NoResourceFoundException ex, HttpServletRequest request) {
         return buildResponse(HttpStatus.NOT_FOUND, "No endpoint found for " + request.getRequestURI(), request);
+    }
+
+    // The URL exists but not for this HTTP method (e.g. POST on /members, which was replaced by
+    // invitations). Without this handler it would also fall into the catch-all and look like a 500.
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex,
+                                                                  HttpServletRequest request) {
+        return buildResponse(HttpStatus.METHOD_NOT_ALLOWED,
+                ex.getMethod() + " is not supported for " + request.getRequestURI(), request);
     }
 
     @ExceptionHandler(Exception.class)
