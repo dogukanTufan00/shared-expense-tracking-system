@@ -41,9 +41,18 @@ public class ExpenseShare {
     @Column(name = "owed_amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal owedAmount;
 
+    // Only filled for PERCENT splits (e.g. 33.33 means 33.33%). Null for EQUAL and AMOUNT shares.
+    @Column(precision = 5, scale = 2)
+    private BigDecimal percent;
+
     public ExpenseShare(Expense expense, User user, BigDecimal owedAmount) {
+        this(expense, user, owedAmount, null);
+    }
+
+    public ExpenseShare(Expense expense, User user, BigDecimal owedAmount, BigDecimal percent) {
         this.expense = expense;
         this.user = user;
         this.owedAmount = owedAmount;
+        this.percent = percent;
     }
 }

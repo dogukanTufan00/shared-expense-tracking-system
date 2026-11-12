@@ -62,8 +62,19 @@ public class Expense {
     @Column(name = "expense_date", nullable = false)
     private LocalDateTime expenseDate;
 
+    // How the cost is divided (EQUAL / PERCENT / AMOUNT). Nullable in the database because rows
+    // created before this column existed have no value; the getter below treats null as EQUAL.
+    @Setter
+    @Enumerated(EnumType.STRING)
+    @Column(name = "split_type")
+    private SplitType splitType;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
+
+    public SplitType getSplitType() {
+        return splitType == null ? SplitType.EQUAL : splitType;
+    }
 
     public Expense(Household household, User paidBy, BigDecimal amount, ExpenseCategory category,
                    String description, boolean recurring, LocalDateTime expenseDate) {

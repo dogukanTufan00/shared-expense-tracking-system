@@ -8,6 +8,7 @@ import com.dogukan_tufan.shared_expense_tracking_system.entity.Membership;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.MembershipRole;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.User;
 import com.dogukan_tufan.shared_expense_tracking_system.exception.ResourceNotFoundException;
+import com.dogukan_tufan.shared_expense_tracking_system.repository.CategorySplitDefaultRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.ExpenseRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.ExpenseShareRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.HouseholdRepository;
@@ -37,6 +38,7 @@ public class HouseholdService {
     private final ExpenseRepository expenseRepository;
     private final ExpenseShareRepository expenseShareRepository;
     private final PaymentRepository paymentRepository;
+    private final CategorySplitDefaultRepository categorySplitDefaultRepository;
     private final HouseholdAccessService accessService;
 
     public HouseholdResponse create(CreateHouseholdRequest request, String currentUserEmail) {
@@ -85,10 +87,11 @@ public class HouseholdService {
 
         // Everything below holds a foreign key back to this household (ExpenseShare to its
         // Expense, which holds one to the household), so the order matters: shares, then
-        // expenses and payments, then memberships, then the household itself.
+        // expenses, payments and category defaults, then memberships, then the household itself.
         expenseShareRepository.deleteByExpenseHouseholdId(householdId);
         expenseRepository.deleteByHouseholdId(householdId);
         paymentRepository.deleteByHouseholdId(householdId);
+        categorySplitDefaultRepository.deleteByHouseholdId(householdId);
         membershipRepository.deleteByHouseholdId(householdId);
         householdRepository.delete(membership.getHousehold());
     }
