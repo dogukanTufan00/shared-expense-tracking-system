@@ -12,6 +12,7 @@ import com.dogukan_tufan.shared_expense_tracking_system.entity.MembershipRole;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.SplitType;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.User;
 import com.dogukan_tufan.shared_expense_tracking_system.event.ExpenseAddedEvent;
+import com.dogukan_tufan.shared_expense_tracking_system.event.ExpenseUpdatedEvent;
 import com.dogukan_tufan.shared_expense_tracking_system.event.RecurringExpenseGeneratedEvent;
 import com.dogukan_tufan.shared_expense_tracking_system.exception.BadRequestException;
 import com.dogukan_tufan.shared_expense_tracking_system.exception.ConflictException;
@@ -32,6 +33,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -54,6 +56,7 @@ public class ExpenseService {
     private final AttachmentRepository attachmentRepository;
     private final AttachmentService attachmentService;
     private final ApplicationEventPublisher eventPublisher;
+    private final ActivityLogService activityLogService;
 
     public ExpenseResponse create(Long householdId, ExpenseRequest request, String currentUserEmail) {
         User currentUser = getUser(currentUserEmail);
@@ -78,6 +81,7 @@ public class ExpenseService {
         expenseRepository.save(expense);
 
         List<ExpenseShare> shares = recalculateShares(expense, plan.shares());
+        activityLogService.expenseAdded(expense, currentUser);
 
         // Only for a real new expense (never for generated copies). NotificationService sends it after commit.
         eventPublisher.publishEvent(new ExpenseAddedEvent(expense.getId(), currentUser.getId()));
@@ -121,6 +125,10 @@ public class ExpenseService {
         Membership payerMembership = requireActivePayer(householdId, request.paidByUserId());
         BigDecimal newAmount = request.amount().setScale(2, RoundingMode.HALF_UP);
 
+        // History: take the values as they are now, before anything changes (see ActivityLogService).
+        ActivityLogService.ExpenseSnapshot before = ActivityLogService.ExpenseSnapshot.of(
+                expense, expenseShareRepository.findByExpenseId(expense.getId()));
+
         // Planned BEFORE the expense is changed: the plan compares the new amount with the old one
         // and reads the old shares, so the expense must still hold its old values at this point.
         SplitPlan plan = planForUpdate(householdId, expense, request, newAmount);
@@ -142,6 +150,13 @@ public class ExpenseService {
         ensureRecurrenceDay(expense);
 
         List<ExpenseShare> shares = recalculateShares(expense, plan.shares());
+        boolean written = activityLogService.expenseUpdated(expense, currentUser, before, shares);
+        // Only a real change sends an edit notification. NotificationService sends it after commit.
+        if (written) {
+            eventPublisher.publishEvent(new ExpenseUpdatedEvent(expense.getId(), currentUser.getId(),
+                    previousAmountIfChanged(before.amount(), expense.getAmount()),
+                    affectedUserIds(before, expense, shares)));
+        }
 
         if (expense.isRecurring()) {
             // Due months are filled in right after this transaction commits (see the event class).
@@ -157,6 +172,8 @@ public class ExpenseService {
         Expense expense = findExpense(householdId, expenseId);
         requirePayerOrAdmin(expense, currentUser, requesterMembership);
 
+        // Recorded first, while the expense still has its amount and description.
+        activityLogService.expenseDeleted(expense, currentUser);
         // Attachments point at this expense too, so their rows and files go first. Then the shares.
         attachmentService.deleteForExpense(expense.getId());
         // Expenses generated from this one point at it, so unlink them first (foreign key).
@@ -191,6 +208,7 @@ public class ExpenseService {
         expenseRepository.save(copy);
 
         recalculateShares(copy, plan.shares());
+        activityLogService.recurringExpenseGenerated(copy);
         eventPublisher.publishEvent(new RecurringExpenseGeneratedEvent(copy.getId()));
         return copy;
     }
@@ -404,6 +422,24 @@ public class ExpenseService {
     }
 
     // ---------- Small helpers ----------
+
+    // The amount before the edit, but only when it really changed. Null tells the notification "no amount change".
+    private static BigDecimal previousAmountIfChanged(BigDecimal oldAmount, BigDecimal newAmount) {
+        return oldAmount.compareTo(newAmount) == 0 ? null : oldAmount;
+    }
+
+    // Everyone who should hear about the edit: the payer and the people with a share, both before and after.
+    // Why both: someone taken out of the split must still learn that their share changed.
+    private static Set<Long> affectedUserIds(ActivityLogService.ExpenseSnapshot before, Expense expense,
+                                             List<ExpenseShare> sharesAfter) {
+        Set<Long> userIds = new HashSet<>(before.owedByUserId().keySet());
+        userIds.add(before.paidByUserId());
+        userIds.add(expense.getPaidBy().getId());
+        for (ExpenseShare share : sharesAfter) {
+            userIds.add(share.getUser().getId());
+        }
+        return userIds;
+    }
 
     private boolean hasShares(List<ShareInput> shares) {
         return shares != null && !shares.isEmpty();

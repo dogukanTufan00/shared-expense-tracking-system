@@ -50,6 +50,7 @@ public class HouseholdService {
     private final HouseholdAccessService accessService;
     private final AttachmentService attachmentService;
     private final NotificationRepository notificationRepository;
+    private final ActivityLogService activityLogService;
 
     public HouseholdResponse create(CreateHouseholdRequest request, String currentUserEmail) {
         User currentUser = getUser(currentUserEmail);
@@ -60,6 +61,7 @@ public class HouseholdService {
         Membership membership = new Membership(currentUser, household, MembershipRole.ADMIN);
         membershipRepository.save(membership);
 
+        activityLogService.householdCreated(household, currentUser);
         return HouseholdResponse.from(household);
     }
 
@@ -85,7 +87,10 @@ public class HouseholdService {
         accessService.requireAdmin(membership);
 
         Household household = membership.getHousehold();
+        // Read the old name first, because setName replaces it.
+        String oldName = household.getName();
         household.setName(request.name());
+        activityLogService.householdRenamed(household, currentUser, oldName);
 
         return HouseholdResponse.from(household);
     }
@@ -116,6 +121,7 @@ public class HouseholdService {
             newFounderMembership.setRole(MembershipRole.ADMIN);
         }
         household.setCreatedBy(newFounderMembership.getUser());
+        activityLogService.ownershipTransferred(household, currentUser, newFounderMembership.getUser());
 
         return HouseholdResponse.from(household);
     }
@@ -167,6 +173,8 @@ public class HouseholdService {
         // unlinked: the household is gone, so its notices would have no working target, and deleting
         // is simpler than keeping rows that show a household name with no household behind them.
         notificationRepository.deleteByHouseholdId(householdId);
+        // Activity history rows point at the household, so they go before it is deleted.
+        activityLogService.deleteForHousehold(householdId);
         membershipRepository.deleteByHouseholdId(householdId);
         householdRepository.delete(household);
     }

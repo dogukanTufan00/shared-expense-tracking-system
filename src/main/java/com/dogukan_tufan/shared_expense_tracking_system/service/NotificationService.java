@@ -14,10 +14,12 @@ import com.dogukan_tufan.shared_expense_tracking_system.entity.Payment;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.PaymentReminder;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.User;
 import com.dogukan_tufan.shared_expense_tracking_system.event.ExpenseAddedEvent;
+import com.dogukan_tufan.shared_expense_tracking_system.event.ExpenseUpdatedEvent;
 import com.dogukan_tufan.shared_expense_tracking_system.event.InvitationAcceptedEvent;
 import com.dogukan_tufan.shared_expense_tracking_system.event.InvitationSentEvent;
 import com.dogukan_tufan.shared_expense_tracking_system.event.PaymentRecordedEvent;
 import com.dogukan_tufan.shared_expense_tracking_system.event.PaymentReminderSentEvent;
+import com.dogukan_tufan.shared_expense_tracking_system.event.PaymentUpdatedEvent;
 import com.dogukan_tufan.shared_expense_tracking_system.event.RecurringExpenseGeneratedEvent;
 import com.dogukan_tufan.shared_expense_tracking_system.exception.ResourceNotFoundException;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.ExpenseRepository;
@@ -93,6 +95,16 @@ public class NotificationService {
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onExpenseUpdated(ExpenseUpdatedEvent event) {
+        pushService.send(runInNewTransaction("EXPENSE_UPDATED", created -> notifyExpenseUpdated(event, created)));
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onPaymentUpdated(PaymentUpdatedEvent event) {
+        pushService.send(runInNewTransaction("PAYMENT_UPDATED", created -> notifyPaymentUpdated(event, created)));
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onInvitationSent(InvitationSentEvent event) {
         pushService.send(runInNewTransaction("INVITATION_RECEIVED", created -> notifyInvitationSent(event, created)));
     }
@@ -165,6 +177,62 @@ public class NotificationService {
                     .detail(truncate(payment.getNote()))
                     .paymentId(payment.getId())
                     .build()));
+        }
+    }
+
+    // The people the event names (payer and people with a share, before and after the edit), except the
+    // editor. Only active members get it, the same rule as a new expense. previousAmount is set only
+    // when the amount changed, so the text can show "old -> new".
+    private void notifyExpenseUpdated(ExpenseUpdatedEvent event, List<Notification> created) {
+        Expense expense = expenseRepository.findById(event.expenseId())
+                .orElseThrow(() -> new ResourceNotFoundException("Expense not found: " + event.expenseId()));
+        User actor = userById(event.actorUserId());
+        Household household = expense.getHousehold();
+
+        for (Membership membership : membershipRepository.findByHouseholdIdAndLeftAtIsNull(household.getId())) {
+            User recipient = membership.getUser();
+            if (recipient.getId().equals(actor.getId()) || !event.affectedUserIds().contains(recipient.getId())) {
+                continue;
+            }
+            created.add(notificationRepository.save(Notification.builder()
+                    .recipient(recipient)
+                    .household(household)
+                    .type(NotificationType.EXPENSE_UPDATED)
+                    .householdName(household.getName())
+                    .actorName(actor.getName())
+                    .amount(expense.getAmount())
+                    .previousAmount(event.previousAmount())
+                    .detail(truncate(expense.getDescription()))
+                    .expenseId(expense.getId())
+                    .build()));
+        }
+    }
+
+    // Sender and receiver (before and after the edit), except the editor. Former members are not
+    // filtered out here, the same as payment notifications on create: a debt they are part of still matters.
+    private void notifyPaymentUpdated(PaymentUpdatedEvent event, List<Notification> created) {
+        Payment payment = paymentRepository.findById(event.paymentId())
+                .orElseThrow(() -> new ResourceNotFoundException("Payment not found: " + event.paymentId()));
+        User actor = userById(event.actorUserId());
+        Household household = payment.getHousehold();
+
+        for (Long recipientId : event.affectedUserIds()) {
+            if (recipientId.equals(actor.getId())) {
+                continue;
+            }
+            // A missing user is skipped instead of failing the whole batch.
+            userRepository.findById(recipientId).ifPresent(recipient -> created.add(notificationRepository.save(
+                    Notification.builder()
+                            .recipient(recipient)
+                            .household(household)
+                            .type(NotificationType.PAYMENT_UPDATED)
+                            .householdName(household.getName())
+                            .actorName(actor.getName())
+                            .amount(payment.getAmount())
+                            .previousAmount(event.previousAmount())
+                            .detail(truncate(payment.getNote()))
+                            .paymentId(payment.getId())
+                            .build())));
         }
     }
 

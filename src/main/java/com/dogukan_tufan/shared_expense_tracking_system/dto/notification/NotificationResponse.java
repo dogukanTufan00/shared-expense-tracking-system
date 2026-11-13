@@ -16,6 +16,8 @@ public record NotificationResponse(
         String actorName,
         String targetName,
         BigDecimal amount,
+        // Set only for edits where the amount changed (amount is then the new value). Otherwise null.
+        BigDecimal previousAmount,
         String detail,
         Long expenseId,
         Long paymentId,
@@ -33,6 +35,7 @@ public record NotificationResponse(
                 notification.getActorName(),
                 notification.getTargetName(),
                 notification.getAmount(),
+                notification.getPreviousAmount(),
                 notification.getDetail(),
                 notification.getExpenseId(),
                 notification.getPaymentId(),

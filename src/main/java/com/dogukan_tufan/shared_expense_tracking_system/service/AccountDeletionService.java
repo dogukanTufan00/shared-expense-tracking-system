@@ -55,6 +55,7 @@ public class AccountDeletionService {
     private final PaymentReminderRepository paymentReminderRepository;
     private final HouseholdService householdService;
     private final BalanceService balanceService;
+    private final ActivityLogService activityLogService;
 
     // Read-only preview for the app's warning screen. Uses the same blocker rules as deleteAccount.
     @Transactional(readOnly = true)
@@ -97,7 +98,7 @@ public class AccountDeletionService {
         List<Membership> activeMemberships = membershipRepository.findByUserIdAndLeftAtIsNull(user.getId());
         rejectIfBlocked(activeMemberships);
 
-        leaveOrDeleteHouseholds(activeMemberships);
+        leaveOrDeleteHouseholds(user, activeMemberships);
         cancelPendingInvitations(user);
         deleteRemindersInvolving(user);
         deleteDevicesAndOwnNotifications(user);
@@ -142,7 +143,7 @@ public class AccountDeletionService {
     // Solo homes are deleted: nobody else can see their data anymore, so keeping it has no use.
     // Other homes are left: the membership row stays with leftAt set, so balances and history still work.
     // Leaving is done first, because deleting a solo home also deletes its memberships.
-    private void leaveOrDeleteHouseholds(List<Membership> activeMemberships) {
+    private void leaveOrDeleteHouseholds(User user, List<Membership> activeMemberships) {
         List<Household> soloHouseholds = new ArrayList<>();
         Instant now = Instant.now();
         for (Membership membership : activeMemberships) {
@@ -150,6 +151,8 @@ public class AccountDeletionService {
                 soloHouseholds.add(membership.getHousehold());
             } else {
                 membership.setLeftAt(now);
+                // Logged as the user's own leave. The user id is kept, so the name is anonymized later too.
+                activityLogService.memberLeft(membership.getHousehold(), user);
             }
         }
         for (Household household : soloHouseholds) {

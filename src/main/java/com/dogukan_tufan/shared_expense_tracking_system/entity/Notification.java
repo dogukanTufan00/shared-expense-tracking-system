@@ -67,6 +67,11 @@ public class Notification {
     @Column(precision = 12, scale = 2)
     private BigDecimal amount;
 
+    // Only for edits (EXPENSE_UPDATED, PAYMENT_UPDATED) when the amount changed: the amount before the edit.
+    // amount then holds the new value. Null for every other notification and for edits without an amount change.
+    @Column(name = "previous_amount", precision = 12, scale = 2)
+    private BigDecimal previousAmount;
+
     // Expense description or payment note. Capped at 200 characters; longer text is cut in the service.
     @Column(length = 200)
     private String detail;
@@ -89,8 +94,8 @@ public class Notification {
 
     @Builder
     public Notification(User recipient, Household household, NotificationType type, String householdName,
-                        String actorName, String targetName, BigDecimal amount, String detail,
-                        Long expenseId, Long paymentId, Long invitationId) {
+                        String actorName, String targetName, BigDecimal amount, BigDecimal previousAmount,
+                        String detail, Long expenseId, Long paymentId, Long invitationId) {
         this.recipient = recipient;
         this.household = household;
         this.type = type;
@@ -98,6 +103,7 @@ public class Notification {
         this.actorName = actorName;
         this.targetName = targetName;
         this.amount = amount;
+        this.previousAmount = previousAmount;
         this.detail = detail;
         this.expenseId = expenseId;
         this.paymentId = paymentId;

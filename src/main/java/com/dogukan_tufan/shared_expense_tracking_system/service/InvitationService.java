@@ -37,6 +37,7 @@ public class InvitationService {
     private final InvitationRepository invitationRepository;
     private final HouseholdAccessService accessService;
     private final ApplicationEventPublisher eventPublisher;
+    private final ActivityLogService activityLogService;
 
     // ADMIN only. Creates a PENDING invitation; no Membership is created yet.
     public InvitationResponse invite(Long householdId, InviteRequest request, String currentUserEmail) {
@@ -137,6 +138,7 @@ public class InvitationService {
 
         Membership membership = new Membership(currentUser, invitation.getHousehold(), MembershipRole.MEMBER);
         membershipRepository.save(membership);
+        activityLogService.memberJoined(invitation.getHousehold(), currentUser);
 
         invitation.setStatus(InvitationStatus.ACCEPTED);
         invitation.setRespondedAt(Instant.now());

@@ -32,6 +32,10 @@ public class PushTextBuilder {
         String detail = notification.getDetail();
         String amount = formatMoney(notification.getAmount(), tr);
         boolean hasDetail = detail != null && !detail.isBlank();
+        // Only for edits where the amount changed: ": ₺750,00 → ₺1.050,00". Empty otherwise.
+        String amountChange = notification.getPreviousAmount() == null
+                ? ""
+                : ": " + formatMoney(notification.getPreviousAmount(), tr) + " " + ARROW + " " + amount;
 
         return switch (notification.getType()) {
             case EXPENSE_ADDED -> tr
@@ -77,6 +81,20 @@ public class PushTextBuilder {
                     : new PushText("Payment reminder",
                             actor + " is gently reminding you that you owe them " + amount
                                     + " in " + household + "." + (hasDetail ? quoted(detail) : ""));
+
+            case EXPENSE_UPDATED -> tr
+                    ? new PushText("Gider düzenlendi " + DOT + " " + household,
+                            hasDetail ? actor + " \"" + detail + "\" giderini düzenledi" + amountChange
+                                      : actor + " bir gideri düzenledi" + amountChange)
+                    : new PushText("Expense edited " + DOT + " " + household,
+                            hasDetail ? actor + " edited \"" + detail + "\"" + amountChange
+                                      : actor + " edited an expense" + amountChange);
+
+            case PAYMENT_UPDATED -> tr
+                    ? new PushText("Ödeme düzenlendi " + DOT + " " + household,
+                            actor + " bir ödemeyi düzenledi" + amountChange)
+                    : new PushText("Payment edited " + DOT + " " + household,
+                            actor + " edited a payment" + amountChange);
         };
     }
 

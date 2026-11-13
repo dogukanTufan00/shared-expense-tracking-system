@@ -24,6 +24,7 @@ public class MembershipService {
     private final UserRepository userRepository;
     private final MembershipRepository membershipRepository;
     private final HouseholdAccessService accessService;
+    private final ActivityLogService activityLogService;
 
     public List<MemberResponse> listActiveMembers(Long householdId, String currentUserEmail) {
         User currentUser = getUser(currentUserEmail);
@@ -63,6 +64,12 @@ public class MembershipService {
 
         // Soft delete: leftAt set, row kept. Past expenses still point at a real Membership/User.
         targetMembership.setLeftAt(Instant.now());
+
+        if (isLeaving) {
+            activityLogService.memberLeft(targetMembership.getHousehold(), currentUser);
+        } else {
+            activityLogService.memberRemoved(targetMembership.getHousehold(), currentUser, targetMembership.getUser());
+        }
     }
 
     // Promote or demote a member. Admin rights can be shared this way: promote someone else, then
@@ -91,7 +98,10 @@ public class MembershipService {
             throw new ConflictException("The last admin of a household cannot be demoted; make someone else admin first");
         }
 
+        MembershipRole oldRole = targetMembership.getRole();
         targetMembership.setRole(request.role());
+        activityLogService.memberRoleChanged(targetMembership.getHousehold(), currentUser,
+                targetMembership.getUser(), oldRole, request.role());
         return MemberResponse.from(targetMembership);
     }
 
