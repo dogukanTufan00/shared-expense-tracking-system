@@ -40,6 +40,11 @@ public class JwtService {
         return parseClaims(token).getSubject();
     }
 
+    // When the token was issued. JWT stores this in whole seconds.
+    public Instant extractIssuedAt(String token) {
+        return parseClaims(token).getIssuedAt().toInstant();
+    }
+
     public boolean isValid(String token) {
         try {
             parseClaims(token);

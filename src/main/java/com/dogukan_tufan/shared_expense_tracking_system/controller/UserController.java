@@ -4,8 +4,12 @@ import com.dogukan_tufan.shared_expense_tracking_system.dto.auth.UserResponse;
 import com.dogukan_tufan.shared_expense_tracking_system.dto.device.RegisterDeviceRequest;
 import com.dogukan_tufan.shared_expense_tracking_system.dto.device.UnregisterDeviceRequest;
 import com.dogukan_tufan.shared_expense_tracking_system.dto.user.ChangePasswordRequest;
+import com.dogukan_tufan.shared_expense_tracking_system.dto.user.DeleteAccountRequest;
+import com.dogukan_tufan.shared_expense_tracking_system.dto.user.DeletionCheckResponse;
 import com.dogukan_tufan.shared_expense_tracking_system.dto.user.UpdateProfileRequest;
+import com.dogukan_tufan.shared_expense_tracking_system.service.AccountDeletionService;
 import com.dogukan_tufan.shared_expense_tracking_system.service.UserService;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +31,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class UserController {
 
     private final UserService userService;
+    private final AccountDeletionService accountDeletionService;
 
     @GetMapping
     public UserResponse getMe(Authentication authentication) {
@@ -56,5 +61,21 @@ public class UserController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void unregisterDevice(@Valid @RequestBody UnregisterDeviceRequest request, Authentication authentication) {
         userService.unregisterDevice(authentication.getName(), request.token());
+    }
+
+    // Warning screen data. GET because it changes nothing.
+    @GetMapping("/deletion-check")
+    @Operation(summary = "Preview what deleting my account would do (blockers, open balances, homes to delete)")
+    public DeletionCheckResponse getDeletionCheck(Authentication authentication) {
+        return accountDeletionService.getDeletionCheck(authentication.getName());
+    }
+
+    // Account deletion is anonymization, not a hard delete (see AccountDeletionService).
+    // DELETE with a body, same style as /devices. The password is required because this cannot be undone.
+    @DeleteMapping
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(summary = "Delete my account (anonymizes it; refused while I am a founder or only admin with other members)")
+    public void deleteAccount(@Valid @RequestBody DeleteAccountRequest request, Authentication authentication) {
+        accountDeletionService.deleteAccount(authentication.getName(), request);
     }
 }

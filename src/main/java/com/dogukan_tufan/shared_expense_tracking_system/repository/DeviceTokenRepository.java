@@ -21,6 +21,10 @@ public interface DeviceTokenRepository extends JpaRepository<DeviceToken, Long> 
     @Transactional
     void deleteByUserIdAndToken(Long userId, String token);
 
+    // Account deletion: a deleted user must not receive pushes on any phone.
+    @Transactional
+    void deleteByUserId(Long userId);
+
     // Used when FCM says a token is dead. A bulk delete query, so it runs in its own short
     // transaction even though PushService itself is not transactional.
     @Transactional

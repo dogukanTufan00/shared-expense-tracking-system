@@ -42,6 +42,12 @@ public class User {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    // Set when the account is deleted. The row is kept (anonymized) because expenses and payments
+    // still point at it, so the roommates' balances stay correct. Null = active account.
+    @Setter
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
+
     public User(String name, String email, String passwordHash) {
         this.name = name;
         this.email = email;

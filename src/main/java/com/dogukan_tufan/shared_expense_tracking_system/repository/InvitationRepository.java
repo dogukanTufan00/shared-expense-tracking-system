@@ -22,6 +22,12 @@ public interface InvitationRepository extends JpaRepository<Invitation, Long> {
     // Pending invitations of one household (GET /api/households/{id}/invitations).
     List<Invitation> findByHouseholdIdAndStatusOrderByCreatedAtDesc(Long householdId, InvitationStatus status);
 
+    // Account deletion: invitations the leaving user sent, which must not stay pending.
+    List<Invitation> findByInvitedByIdAndStatus(Long invitedById, InvitationStatus status);
+
+    // Account deletion: invitations addressed to the leaving user, which must not stay pending.
+    List<Invitation> findByInvitedUserIdAndStatus(Long invitedUserId, InvitationStatus status);
+
     // Blocks a second pending invitation to the same person for the same household.
     boolean existsByHouseholdIdAndInvitedUserIdAndStatus(Long householdId, Long invitedUserId, InvitationStatus status);
 

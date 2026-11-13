@@ -26,6 +26,10 @@ public interface MembershipRepository extends JpaRepository<Membership, Long> {
     // Every membership, including people who have left (balances: a former member can still owe money).
     List<Membership> findByHouseholdId(Long householdId);
 
+    // Every membership of a user, including households they have left. Used when deleting an account,
+    // because the names they leave behind in those households' notifications must be cleaned up too.
+    List<Membership> findByUserId(Long userId);
+
     // Was this user ever a member of the household, even if they have left since (payments to/from former members).
     boolean existsByUserIdAndHouseholdId(Long userId, Long householdId);
 

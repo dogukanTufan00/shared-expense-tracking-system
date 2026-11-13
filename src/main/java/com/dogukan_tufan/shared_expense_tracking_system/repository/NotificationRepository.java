@@ -26,6 +26,26 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     // Used when deleting a household (see HouseholdService.delete).
     void deleteByHouseholdId(Long householdId);
 
+    // Used when deleting an account: the inbox of that user goes with them.
+    void deleteByRecipientId(Long recipientId);
+
+    // Account deletion: names are copied into notifications as history, so a deleted user's current
+    // name is replaced in the notices other people received in the households they shared.
+    // Bulk JPQL update (one SQL statement) instead of loading every row.
+    @Modifying
+    @Query("update Notification n set n.actorName = :placeholder "
+            + "where n.household.id in :householdIds and n.actorName = :name")
+    int replaceActorName(@Param("householdIds") List<Long> householdIds,
+                         @Param("name") String name,
+                         @Param("placeholder") String placeholder);
+
+    @Modifying
+    @Query("update Notification n set n.targetName = :placeholder "
+            + "where n.household.id in :householdIds and n.targetName = :name")
+    int replaceTargetName(@Param("householdIds") List<Long> householdIds,
+                          @Param("name") String name,
+                          @Param("placeholder") String placeholder);
+
     // Nightly cleanup of old history. Returns how many rows were deleted.
     @Modifying
     @Query("delete from Notification n where n.createdAt < :cutoff")

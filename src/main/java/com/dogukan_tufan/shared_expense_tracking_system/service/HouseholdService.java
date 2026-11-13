@@ -136,6 +136,16 @@ public class HouseholdService {
             accessService.requireAdmin(membership);
         }
 
+        purgeHousehold(membership.getHousehold());
+    }
+
+    // Removes a household and everything that belongs to it, WITHOUT the founder/admin checks.
+    // Package-private on purpose: only AccountDeletionService reuses it, when the deleted user was
+    // the last person living in the household. Nobody else can see that data anymore, so keeping it
+    // would only leave orphan rows. Callers are responsible for the authorization check.
+    void purgeHousehold(Household household) {
+        Long householdId = household.getId();
+
         // Everything below holds a foreign key back to this household (ExpenseShare to its
         // Expense, which holds one to the household), so the order matters: attachments (rows and
         // files) first, then shares, then expenses, payments, category defaults and invitations,
@@ -154,7 +164,7 @@ public class HouseholdService {
         // is simpler than keeping rows that show a household name with no household behind them.
         notificationRepository.deleteByHouseholdId(householdId);
         membershipRepository.deleteByHouseholdId(householdId);
-        householdRepository.delete(membership.getHousehold());
+        householdRepository.delete(household);
     }
 
     private User getUser(String email) {
