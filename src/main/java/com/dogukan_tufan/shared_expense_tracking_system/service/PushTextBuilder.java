@@ -67,7 +67,22 @@ public class PushTextBuilder {
                     : new PushText("Recurring expense " + DOT + " " + household,
                             hasDetail ? detail + " " + amount + " was added this month too"
                                       : amount + " was added this month too");
+
+            // Polite on purpose: a reminder is a nudge, not an accusation. The note (if any) is shown in
+            // quotes on a new line, so it reads as the creditor's own words.
+            case PAYMENT_REMINDER -> tr
+                    ? new PushText("Ödeme hatırlatması",
+                            actor + " nazikçe hatırlatıyor: " + household + " evinde ona "
+                                    + amount + " borcun var." + (hasDetail ? quoted(detail) : ""))
+                    : new PushText("Payment reminder",
+                            actor + " is gently reminding you that you owe them " + amount
+                                    + " in " + household + "." + (hasDetail ? quoted(detail) : ""));
         };
+    }
+
+    // Puts the note on its own line inside curly quotes (U+201C and U+201D).
+    private static String quoted(String detail) {
+        return "\n“" + detail + "”";
     }
 
     // 1234.5 -> "₺1.234,50" in Turkish, "₺1,234.50" in English.

@@ -11,11 +11,13 @@ import com.dogukan_tufan.shared_expense_tracking_system.entity.MembershipRole;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.Notification;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.NotificationType;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.Payment;
+import com.dogukan_tufan.shared_expense_tracking_system.entity.PaymentReminder;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.User;
 import com.dogukan_tufan.shared_expense_tracking_system.event.ExpenseAddedEvent;
 import com.dogukan_tufan.shared_expense_tracking_system.event.InvitationAcceptedEvent;
 import com.dogukan_tufan.shared_expense_tracking_system.event.InvitationSentEvent;
 import com.dogukan_tufan.shared_expense_tracking_system.event.PaymentRecordedEvent;
+import com.dogukan_tufan.shared_expense_tracking_system.event.PaymentReminderSentEvent;
 import com.dogukan_tufan.shared_expense_tracking_system.event.RecurringExpenseGeneratedEvent;
 import com.dogukan_tufan.shared_expense_tracking_system.exception.ResourceNotFoundException;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.ExpenseRepository;
@@ -24,6 +26,7 @@ import com.dogukan_tufan.shared_expense_tracking_system.repository.InvitationRep
 import com.dogukan_tufan.shared_expense_tracking_system.repository.MembershipRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.NotificationRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.PaymentRepository;
+import com.dogukan_tufan.shared_expense_tracking_system.repository.PaymentReminderRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -69,6 +72,7 @@ public class NotificationService {
     private final ExpenseRepository expenseRepository;
     private final ExpenseShareRepository expenseShareRepository;
     private final PaymentRepository paymentRepository;
+    private final PaymentReminderRepository paymentReminderRepository;
     private final InvitationRepository invitationRepository;
     private final MembershipRepository membershipRepository;
     private final TransactionTemplate transactionTemplate;
@@ -101,6 +105,11 @@ public class NotificationService {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onRecurringExpenseGenerated(RecurringExpenseGeneratedEvent event) {
         pushService.send(runInNewTransaction("RECURRING_EXPENSE_ADDED", created -> notifyRecurringExpenseGenerated(event, created)));
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onPaymentReminderSent(PaymentReminderSentEvent event) {
+        pushService.send(runInNewTransaction("PAYMENT_REMINDER", created -> notifyPaymentReminderSent(event, created)));
     }
 
     // ---------- Building the notifications ----------
@@ -226,6 +235,25 @@ public class NotificationService {
                     .expenseId(copy.getId())
                     .build()));
         }
+    }
+
+    // Only the debtor is notified. The creditor sent it, so they already know. The amount is the one
+    // stored on the reminder (the amount owed when it was sent), not the current balance.
+    private void notifyPaymentReminderSent(PaymentReminderSentEvent event, List<Notification> created) {
+        PaymentReminder reminder = paymentReminderRepository.findById(event.reminderId())
+                .orElseThrow(() -> new ResourceNotFoundException("Reminder not found: " + event.reminderId()));
+        Household household = reminder.getHousehold();
+        User creditor = reminder.getCreditor();
+
+        created.add(notificationRepository.save(Notification.builder()
+                .recipient(reminder.getDebtor())
+                .household(household)
+                .type(NotificationType.PAYMENT_REMINDER)
+                .householdName(household.getName())
+                .actorName(creditor.getName())
+                .amount(reminder.getAmount())
+                .detail(truncate(reminder.getNote()))
+                .build()));
     }
 
     // ---------- Reading and marking (the inbox endpoints) ----------

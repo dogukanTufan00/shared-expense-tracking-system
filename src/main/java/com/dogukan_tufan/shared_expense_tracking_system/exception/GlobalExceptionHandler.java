@@ -40,6 +40,12 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.CONFLICT, ex.getMessage(), request);
     }
 
+    // 429: the client is allowed to try again later (e.g. a reminder cooldown), so it is not a 400 or 409.
+    @ExceptionHandler(TooManyRequestsException.class)
+    public ResponseEntity<ErrorResponse> handleTooManyRequests(TooManyRequestsException ex, HttpServletRequest request) {
+        return buildResponse(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage(), request);
+    }
+
     // Also covers "you're not an active member of this household" -- we deliberately return the
     // same 404 as a truly nonexistent id, instead of 403, so a stranger can't tell a private
     // household apart from one that was never created (CLAUDE.md section 7, open decision #3).

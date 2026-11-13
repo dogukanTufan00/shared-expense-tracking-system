@@ -18,6 +18,7 @@ import com.dogukan_tufan.shared_expense_tracking_system.repository.DeviceTokenRe
 import com.dogukan_tufan.shared_expense_tracking_system.repository.InvitationRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.MembershipRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.NotificationRepository;
+import com.dogukan_tufan.shared_expense_tracking_system.repository.PaymentReminderRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -51,6 +52,7 @@ public class AccountDeletionService {
     private final InvitationRepository invitationRepository;
     private final DeviceTokenRepository deviceTokenRepository;
     private final NotificationRepository notificationRepository;
+    private final PaymentReminderRepository paymentReminderRepository;
     private final HouseholdService householdService;
     private final BalanceService balanceService;
 
@@ -97,6 +99,7 @@ public class AccountDeletionService {
 
         leaveOrDeleteHouseholds(activeMemberships);
         cancelPendingInvitations(user);
+        deleteRemindersInvolving(user);
         deleteDevicesAndOwnNotifications(user);
         replaceNameInHouseholdNotifications(user);
         anonymize(user);
@@ -168,6 +171,12 @@ public class AccountDeletionService {
             invitation.setStatus(InvitationStatus.CANCELLED);
             invitation.setRespondedAt(now);
         }
+    }
+
+    // Payment reminders the user sent or received: the note is written about a person, so it is
+    // personal data and goes with the account. Runs before the user row is anonymized.
+    private void deleteRemindersInvolving(User user) {
+        paymentReminderRepository.deleteByUserInvolved(user.getId());
     }
 
     // Push tokens: without this, the deleted user's phones would keep getting notifications.

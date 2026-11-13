@@ -19,6 +19,7 @@ import com.dogukan_tufan.shared_expense_tracking_system.repository.InvitationRep
 import com.dogukan_tufan.shared_expense_tracking_system.repository.MembershipRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.NotificationRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.PaymentRepository;
+import com.dogukan_tufan.shared_expense_tracking_system.repository.PaymentReminderRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -43,6 +44,7 @@ public class HouseholdService {
     private final ExpenseRepository expenseRepository;
     private final ExpenseShareRepository expenseShareRepository;
     private final PaymentRepository paymentRepository;
+    private final PaymentReminderRepository paymentReminderRepository;
     private final CategorySplitDefaultRepository categorySplitDefaultRepository;
     private final InvitationRepository invitationRepository;
     private final HouseholdAccessService accessService;
@@ -157,6 +159,8 @@ public class HouseholdService {
         expenseRepository.clearGeneratedFromForHousehold(householdId);
         expenseRepository.deleteByHouseholdId(householdId);
         paymentRepository.deleteByHouseholdId(householdId);
+        // Payment reminders hold a foreign key to the household, so they go before it is deleted.
+        paymentReminderRepository.deleteByHouseholdId(householdId);
         categorySplitDefaultRepository.deleteByHouseholdId(householdId);
         invitationRepository.deleteByHouseholdId(householdId);
         // Notifications only point at the household (nullable link). They are deleted rather than
