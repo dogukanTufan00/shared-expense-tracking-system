@@ -12,6 +12,9 @@ import com.dogukan_tufan.shared_expense_tracking_system.exception.BadRequestExce
 import com.dogukan_tufan.shared_expense_tracking_system.exception.ForbiddenActionException;
 import com.dogukan_tufan.shared_expense_tracking_system.exception.ResourceNotFoundException;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.CategorySplitDefaultRepository;
+import com.dogukan_tufan.shared_expense_tracking_system.repository.DepositShareRepository;
+import com.dogukan_tufan.shared_expense_tracking_system.repository.DepositTransferRepository;
+import com.dogukan_tufan.shared_expense_tracking_system.repository.HouseholdDepositRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.ExpenseRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.ExpenseShareRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.HouseholdRepository;
@@ -54,6 +57,9 @@ public class HouseholdService {
     private final ActivityLogService activityLogService;
     private final ChoreService choreService;
     private final ShoppingItemRepository shoppingItemRepository;
+    private final DepositTransferRepository depositTransferRepository;
+    private final DepositShareRepository depositShareRepository;
+    private final HouseholdDepositRepository depositRepository;
 
     public HouseholdResponse create(CreateHouseholdRequest request, String currentUserEmail) {
         User currentUser = getUser(currentUserEmail);
@@ -182,6 +188,11 @@ public class HouseholdService {
         activityLogService.deleteForHousehold(householdId);
         // Chore reminders, completions, rotations and chores point at the household and at users, so they go first.
         choreService.deleteForHousehold(householdId);
+        // Deposit transfers, shares and the deposit record all point at the household (and the transfers
+        // at users, who are never deleted). They go before the household row, so nothing is left dangling.
+        depositTransferRepository.deleteByHouseholdId(householdId);
+        depositShareRepository.deleteByHouseholdId(householdId);
+        depositRepository.deleteByHouseholdId(householdId);
         membershipRepository.deleteByHouseholdId(householdId);
         householdRepository.delete(household);
     }

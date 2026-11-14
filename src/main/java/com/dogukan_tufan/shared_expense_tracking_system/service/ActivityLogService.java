@@ -6,6 +6,8 @@ import com.dogukan_tufan.shared_expense_tracking_system.dto.activity.FieldChange
 import com.dogukan_tufan.shared_expense_tracking_system.entity.ActivityLog;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.ActivityType;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.Chore;
+import com.dogukan_tufan.shared_expense_tracking_system.entity.DepositShare;
+import com.dogukan_tufan.shared_expense_tracking_system.entity.DepositTransfer;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.Expense;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.ExpenseCategory;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.ExpenseShare;
@@ -305,6 +307,75 @@ public class ActivityLogService {
         return changes;
     }
 
+    // ---------- Deposit ----------
+
+    // Snapshot of the deposit (total and each person's share). Taken before the change, like the others.
+    // Shares are keyed by user id; a person with no row counts as 0 (see amountOrZero).
+    public record DepositSnapshot(BigDecimal totalAmount, Map<Long, BigDecimal> sharesByUserId) {
+
+        public static DepositSnapshot of(BigDecimal totalAmount, List<DepositShare> shares) {
+            Map<Long, BigDecimal> byUser = new HashMap<>();
+            for (DepositShare share : shares) {
+                byUser.put(share.getUser().getId(), share.getAmount());
+            }
+            return new DepositSnapshot(totalAmount, byUser);
+        }
+    }
+
+    // A manual change of the total or of the shares. Nothing is written when nothing changed.
+    // Returns true when a row was written.
+    public boolean depositUpdated(Household household, User actor, DepositSnapshot before, DepositSnapshot after) {
+        List<FieldChange> changes = new ArrayList<>();
+        addAmountChange(changes, "totalAmount", before.totalAmount(), after.totalAmount());
+        // One "share" entry per person whose share changed, ordered by user id (same as expense splits).
+        Set<Long> userIds = new TreeSet<>(before.sharesByUserId().keySet());
+        userIds.addAll(after.sharesByUserId().keySet());
+        for (Long userId : userIds) {
+            BigDecimal oldAmount = amountOrZero(before.sharesByUserId().get(userId));
+            BigDecimal newAmount = amountOrZero(after.sharesByUserId().get(userId));
+            if (!sameAmount(oldAmount, newAmount)) {
+                changes.add(new FieldChange("share", moneyText(oldAmount), moneyText(newAmount), userId));
+            }
+        }
+        if (changes.isEmpty()) {
+            return false;
+        }
+        activityLogRepository.save(ActivityLog.builder()
+                .household(household)
+                .type(ActivityType.DEPOSIT_UPDATED)
+                .actorUserId(actor.getId())
+                .amount(after.totalAmount())
+                .changes(toJson(changes))
+                .build());
+        return true;
+    }
+
+    // One row per move-out or join (not one per receiver): the amount is the total that moved.
+    // direction tells the app which one it was: "MOVE_OUT" (target = the leaver) or "JOIN" (target = the newcomer).
+    public void depositTransferred(Household household, User actor, User target, BigDecimal amount, String direction) {
+        List<FieldChange> changes = List.of(new FieldChange("direction", null, direction, null));
+        activityLogRepository.save(ActivityLog.builder()
+                .household(household)
+                .type(ActivityType.DEPOSIT_TRANSFERRED)
+                .actorUserId(actor.getId())
+                .subjectUserId(target.getId())
+                .amount(amount)
+                .changes(toJson(changes))
+                .build());
+    }
+
+    // Same layout as a payment: subject = the giver, otherUserId = the taker.
+    public void depositTransferDeleted(DepositTransfer transfer, User actor) {
+        activityLogRepository.save(ActivityLog.builder()
+                .household(transfer.getHousehold())
+                .type(ActivityType.DEPOSIT_TRANSFER_DELETED)
+                .actorUserId(actor.getId())
+                .subjectUserId(transfer.getFromUser().getId())
+                .otherUserId(transfer.getToUser().getId())
+                .amount(transfer.getAmount())
+                .build());
+    }
+
     // ---------- Cleanup ----------
 
     // Called by HouseholdService.purgeHousehold before the household row is deleted (foreign key).
@@ -483,6 +554,11 @@ public class ActivityLogService {
             return;
         }
         changes.add(new FieldChange(field, moneyText(oldValue), moneyText(newValue), null));
+    }
+
+    // A missing share counts as 0, so "no row yet" and "0.00" are the same thing in the history.
+    private static BigDecimal amountOrZero(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
     }
 
     private static boolean sameAmount(BigDecimal a, BigDecimal b) {

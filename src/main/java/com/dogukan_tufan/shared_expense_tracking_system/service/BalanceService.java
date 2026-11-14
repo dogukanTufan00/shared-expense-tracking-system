@@ -2,12 +2,14 @@ package com.dogukan_tufan.shared_expense_tracking_system.service;
 
 import com.dogukan_tufan.shared_expense_tracking_system.dto.balance.BalanceResponse;
 import com.dogukan_tufan.shared_expense_tracking_system.dto.balance.SettlementResponse;
+import com.dogukan_tufan.shared_expense_tracking_system.entity.DepositTransfer;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.Expense;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.ExpenseShare;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.Membership;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.Payment;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.User;
 import com.dogukan_tufan.shared_expense_tracking_system.exception.ResourceNotFoundException;
+import com.dogukan_tufan.shared_expense_tracking_system.repository.DepositTransferRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.ExpenseRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.ExpenseShareRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.MembershipRepository;
@@ -41,6 +43,7 @@ public class BalanceService {
     private final ExpenseRepository expenseRepository;
     private final ExpenseShareRepository expenseShareRepository;
     private final PaymentRepository paymentRepository;
+    private final DepositTransferRepository depositTransferRepository;
     private final HouseholdAccessService accessService;
 
     public List<BalanceResponse> getBalances(Long householdId, String currentUserEmail) {
@@ -68,15 +71,24 @@ public class BalanceService {
         Map<Long, BigDecimal> sent = sumBy(payments, p -> p.getFromUser().getId(), Payment::getAmount);
         Map<Long, BigDecimal> received = sumBy(payments, p -> p.getToUser().getId(), Payment::getAmount);
 
+        // Deposit transfers: the giver (fromUser) is owed the amount, the taker (toUser) owes it.
+        // So they count like a payment in the opposite direction: + given away, - taken over.
+        List<DepositTransfer> depositTransfers = depositTransferRepository.findByHouseholdId(householdId);
+        Map<Long, BigDecimal> givenAway = sumBy(depositTransfers, t -> t.getFromUser().getId(), DepositTransfer::getAmount);
+        Map<Long, BigDecimal> takenOver = sumBy(depositTransfers, t -> t.getToUser().getId(), DepositTransfer::getAmount);
+
         return membersByUserId.values().stream()
                 .map(m -> {
                     Long userId = m.getUser().getId();
                     // paid - owed: what they fronted beyond their own fair share across all expenses.
                     // + sent - received: payments already settle some of that, in either direction.
+                    // + given away - taken over: deposit share handed over (see DepositTransfer).
                     BigDecimal net = amountFor(paid, userId)
                             .subtract(amountFor(owed, userId))
                             .add(amountFor(sent, userId))
-                            .subtract(amountFor(received, userId));
+                            .subtract(amountFor(received, userId))
+                            .add(amountFor(givenAway, userId))
+                            .subtract(amountFor(takenOver, userId));
                     return new BalanceResponse(userId, m.getUser().getName(), net);
                 })
                 // Former members who are fully settled are just noise, so they are hidden.
