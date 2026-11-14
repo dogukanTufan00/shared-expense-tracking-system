@@ -22,6 +22,7 @@ import com.dogukan_tufan.shared_expense_tracking_system.repository.AttachmentRep
 import com.dogukan_tufan.shared_expense_tracking_system.repository.CategorySplitDefaultRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.ExpenseRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.ExpenseShareRepository;
+import com.dogukan_tufan.shared_expense_tracking_system.repository.ShoppingItemRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.MembershipRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -49,6 +50,7 @@ public class ExpenseService {
     private final UserRepository userRepository;
     private final ExpenseRepository expenseRepository;
     private final ExpenseShareRepository expenseShareRepository;
+    private final ShoppingItemRepository shoppingItemRepository;
     private final MembershipRepository membershipRepository;
     private final CategorySplitDefaultRepository categorySplitDefaultRepository;
     private final HouseholdAccessService accessService;
@@ -176,6 +178,8 @@ public class ExpenseService {
         activityLogService.expenseDeleted(expense, currentUser);
         // Attachments point at this expense too, so their rows and files go first. Then the shares.
         attachmentService.deleteForExpense(expense.getId());
+        // Shopping items saved into this expense stay on the list as bought; only their link goes (foreign key).
+        shoppingItemRepository.clearExpenseLink(expense.getId());
         // Expenses generated from this one point at it, so unlink them first (foreign key).
         expenseRepository.clearGeneratedFrom(expense);
         expenseShareRepository.deleteByExpenseId(expense.getId());

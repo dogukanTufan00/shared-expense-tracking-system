@@ -9,6 +9,9 @@ public final class HouseholdLimits {
     // Chores per household. Keeps the chore list short enough to load every rotation in one query.
     public static final int MAX_CHORES_PER_HOUSEHOLD = 20;
 
+    // Shopping list rows per household, bought ones included. Keeps the list small and cheap to load.
+    public static final int MAX_SHOPPING_ITEMS_PER_HOUSEHOLD = 100;
+
     private HouseholdLimits() {
     }
 }

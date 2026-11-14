@@ -20,6 +20,7 @@ import com.dogukan_tufan.shared_expense_tracking_system.repository.MembershipRep
 import com.dogukan_tufan.shared_expense_tracking_system.repository.NotificationRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.PaymentRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.PaymentReminderRepository;
+import com.dogukan_tufan.shared_expense_tracking_system.repository.ShoppingItemRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -52,6 +53,7 @@ public class HouseholdService {
     private final NotificationRepository notificationRepository;
     private final ActivityLogService activityLogService;
     private final ChoreService choreService;
+    private final ShoppingItemRepository shoppingItemRepository;
 
     public HouseholdResponse create(CreateHouseholdRequest request, String currentUserEmail) {
         User currentUser = getUser(currentUserEmail);
@@ -160,6 +162,8 @@ public class HouseholdService {
         // files) first, then shares, then expenses, payments, category defaults and invitations,
         // then memberships, then the household itself.
         attachmentService.deleteForHousehold(householdId);
+        // Shopping items point at this household and at its expenses, so they go before the expenses.
+        shoppingItemRepository.deleteByHouseholdId(householdId);
         expenseShareRepository.deleteByExpenseHouseholdId(householdId);
         // Expenses generated from others point at each other (generated_from), so unlink them
         // before the rows are deleted, otherwise the delete order could break the foreign key.
