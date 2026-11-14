@@ -8,6 +8,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -20,8 +21,12 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
 
+// Why the indexes: PostgreSQL does not index foreign keys by itself, and the expense lists and balances
+// filter by household and sort or range by expense date.
 @Entity
-@Table(name = "expenses")
+@Table(name = "expenses", indexes = {
+        @Index(name = "idx_expenses_household_expense_date", columnList = "household_id, expense_date")
+})
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Expense {

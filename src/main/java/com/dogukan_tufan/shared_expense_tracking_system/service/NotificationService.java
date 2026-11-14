@@ -2,6 +2,8 @@ package com.dogukan_tufan.shared_expense_tracking_system.service;
 
 import com.dogukan_tufan.shared_expense_tracking_system.dto.notification.NotificationResponse;
 import com.dogukan_tufan.shared_expense_tracking_system.dto.notification.UnreadCountResponse;
+import com.dogukan_tufan.shared_expense_tracking_system.entity.Chore;
+import com.dogukan_tufan.shared_expense_tracking_system.entity.ChoreReminder;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.Expense;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.ExpenseShare;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.Household;
@@ -21,7 +23,11 @@ import com.dogukan_tufan.shared_expense_tracking_system.event.PaymentRecordedEve
 import com.dogukan_tufan.shared_expense_tracking_system.event.PaymentReminderSentEvent;
 import com.dogukan_tufan.shared_expense_tracking_system.event.PaymentUpdatedEvent;
 import com.dogukan_tufan.shared_expense_tracking_system.event.RecurringExpenseGeneratedEvent;
+import com.dogukan_tufan.shared_expense_tracking_system.event.ChoreReminderSentEvent;
+import com.dogukan_tufan.shared_expense_tracking_system.event.ChoreTurnEvent;
 import com.dogukan_tufan.shared_expense_tracking_system.exception.ResourceNotFoundException;
+import com.dogukan_tufan.shared_expense_tracking_system.repository.ChoreReminderRepository;
+import com.dogukan_tufan.shared_expense_tracking_system.repository.ChoreRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.ExpenseRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.ExpenseShareRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.InvitationRepository;
@@ -75,6 +81,8 @@ public class NotificationService {
     private final ExpenseShareRepository expenseShareRepository;
     private final PaymentRepository paymentRepository;
     private final PaymentReminderRepository paymentReminderRepository;
+    private final ChoreRepository choreRepository;
+    private final ChoreReminderRepository choreReminderRepository;
     private final InvitationRepository invitationRepository;
     private final MembershipRepository membershipRepository;
     private final TransactionTemplate transactionTemplate;
@@ -122,6 +130,16 @@ public class NotificationService {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onPaymentReminderSent(PaymentReminderSentEvent event) {
         pushService.send(runInNewTransaction("PAYMENT_REMINDER", created -> notifyPaymentReminderSent(event, created)));
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onChoreTurn(ChoreTurnEvent event) {
+        pushService.send(runInNewTransaction("CHORE_TURN", created -> notifyChoreTurn(event, created)));
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onChoreReminderSent(ChoreReminderSentEvent event) {
+        pushService.send(runInNewTransaction("CHORE_REMINDER", created -> notifyChoreReminderSent(event, created)));
     }
 
     // ---------- Building the notifications ----------
@@ -321,6 +339,42 @@ public class NotificationService {
                 .actorName(creditor.getName())
                 .amount(reminder.getAmount())
                 .detail(truncate(reminder.getNote()))
+                .build()));
+    }
+
+    // Only the person whose turn it is now is notified. The actor is the person who marked it done.
+    // The detail is the chore name, so the text can say which chore it is.
+    private void notifyChoreTurn(ChoreTurnEvent event, List<Notification> created) {
+        Chore chore = choreRepository.findById(event.choreId())
+                .orElseThrow(() -> new ResourceNotFoundException("Chore not found: " + event.choreId()));
+        User actor = userById(event.actorUserId());
+        User next = userById(event.nextUserId());
+        Household household = chore.getHousehold();
+
+        created.add(notificationRepository.save(Notification.builder()
+                .recipient(next)
+                .household(household)
+                .type(NotificationType.CHORE_TURN)
+                .householdName(household.getName())
+                .actorName(actor.getName())
+                .detail(truncate(chore.getName()))
+                .build()));
+    }
+
+    // Only the person whose turn it is gets the reminder. The sender already knows what they sent.
+    private void notifyChoreReminderSent(ChoreReminderSentEvent event, List<Notification> created) {
+        ChoreReminder reminder = choreReminderRepository.findById(event.reminderId())
+                .orElseThrow(() -> new ResourceNotFoundException("Reminder not found: " + event.reminderId()));
+        Chore chore = reminder.getChore();
+        Household household = chore.getHousehold();
+
+        created.add(notificationRepository.save(Notification.builder()
+                .recipient(reminder.getTarget())
+                .household(household)
+                .type(NotificationType.CHORE_REMINDER)
+                .householdName(household.getName())
+                .actorName(reminder.getSender().getName())
+                .detail(truncate(chore.getName()))
                 .build()));
     }
 

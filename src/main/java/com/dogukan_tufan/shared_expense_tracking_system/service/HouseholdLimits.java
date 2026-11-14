@@ -6,6 +6,9 @@ public final class HouseholdLimits {
 
     public static final int MAX_ACTIVE_MEMBERS = 3;
 
+    // Chores per household. Keeps the chore list short enough to load every rotation in one query.
+    public static final int MAX_CHORES_PER_HOUSEHOLD = 20;
+
     private HouseholdLimits() {
     }
 }

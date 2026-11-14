@@ -6,6 +6,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -19,8 +20,12 @@ import java.time.Instant;
 // A real-world repayment from one member to another (e.g. "Ayse paid Dogukan 50 TL back").
 // No setters anywhere: changes go through update(...) below, which is the only place a payment's
 // details can change. That keeps the edit rules in one explicit spot instead of scattered setters.
+// Why the index: PostgreSQL does not index foreign keys by itself, and the payment list and balances
+// filter by household.
 @Entity
-@Table(name = "payments")
+@Table(name = "payments", indexes = {
+        @Index(name = "idx_payments_household_id", columnList = "household_id")
+})
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Payment {

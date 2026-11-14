@@ -14,6 +14,7 @@ import com.dogukan_tufan.shared_expense_tracking_system.entity.User;
 import com.dogukan_tufan.shared_expense_tracking_system.exception.BadRequestException;
 import com.dogukan_tufan.shared_expense_tracking_system.exception.ConflictException;
 import com.dogukan_tufan.shared_expense_tracking_system.exception.ResourceNotFoundException;
+import com.dogukan_tufan.shared_expense_tracking_system.repository.ChoreReminderRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.DeviceTokenRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.InvitationRepository;
 import com.dogukan_tufan.shared_expense_tracking_system.repository.MembershipRepository;
@@ -53,6 +54,8 @@ public class AccountDeletionService {
     private final DeviceTokenRepository deviceTokenRepository;
     private final NotificationRepository notificationRepository;
     private final PaymentReminderRepository paymentReminderRepository;
+    private final ChoreReminderRepository choreReminderRepository;
+    private final ChoreService choreService;
     private final HouseholdService householdService;
     private final BalanceService balanceService;
     private final ActivityLogService activityLogService;
@@ -151,6 +154,8 @@ public class AccountDeletionService {
                 soloHouseholds.add(membership.getHousehold());
             } else {
                 membership.setLeftAt(now);
+                // The rotations of that household must not keep the deleted user (see ChoreService.removeFromRotations).
+                choreService.removeFromRotations(membership.getHousehold().getId(), user.getId());
                 // Logged as the user's own leave. The user id is kept, so the name is anonymized later too.
                 activityLogService.memberLeft(membership.getHousehold(), user);
             }
@@ -178,8 +183,11 @@ public class AccountDeletionService {
 
     // Payment reminders the user sent or received: the note is written about a person, so it is
     // personal data and goes with the account. Runs before the user row is anonymized.
+    // Chore reminders link two people the same way, so they go too. Completions are kept: the user row is
+    // anonymized, and the "who did it" history of the chore is still useful to the others.
     private void deleteRemindersInvolving(User user) {
         paymentReminderRepository.deleteByUserInvolved(user.getId());
+        choreReminderRepository.deleteByUserInvolved(user.getId());
     }
 
     // Push tokens: without this, the deleted user's phones would keep getting notifications.

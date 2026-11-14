@@ -95,6 +95,19 @@ public class PushTextBuilder {
                             actor + " bir ödemeyi düzenledi" + amountChange)
                     : new PushText("Payment edited " + DOT + " " + household,
                             actor + " edited a payment" + amountChange);
+
+            // detail holds the chore name here. The text quotes it, like an expense description.
+            case CHORE_TURN -> tr
+                    ? new PushText("Sıra sende " + DOT + " " + household,
+                            actor + " \"" + detail + "\" işini yaptı, sıra sende.")
+                    : new PushText("Your turn " + DOT + " " + household,
+                            actor + " did \"" + detail + "\", it's your turn now.");
+
+            case CHORE_REMINDER -> tr
+                    ? new PushText("Hatırlatma " + DOT + " " + household,
+                            actor + " nazikçe hatırlatıyor: \"" + detail + "\" sırası sende.")
+                    : new PushText("Reminder " + DOT + " " + household,
+                            actor + " is gently reminding you: it's your turn for \"" + detail + "\".");
         };
     }
 

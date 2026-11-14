@@ -8,6 +8,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -18,8 +19,13 @@ import lombok.Setter;
 
 import java.time.Instant;
 
+// Why the indexes: PostgreSQL does not index foreign keys by itself. Every authorization check looks up
+// memberships by user and household, and the member lists filter by household.
 @Entity
-@Table(name = "memberships")
+@Table(name = "memberships", indexes = {
+        @Index(name = "idx_memberships_household_id", columnList = "household_id"),
+        @Index(name = "idx_memberships_user_id", columnList = "user_id")
+})
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Membership {

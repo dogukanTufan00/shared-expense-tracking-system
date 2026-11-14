@@ -51,6 +51,7 @@ public class HouseholdService {
     private final AttachmentService attachmentService;
     private final NotificationRepository notificationRepository;
     private final ActivityLogService activityLogService;
+    private final ChoreService choreService;
 
     public HouseholdResponse create(CreateHouseholdRequest request, String currentUserEmail) {
         User currentUser = getUser(currentUserEmail);
@@ -175,6 +176,8 @@ public class HouseholdService {
         notificationRepository.deleteByHouseholdId(householdId);
         // Activity history rows point at the household, so they go before it is deleted.
         activityLogService.deleteForHousehold(householdId);
+        // Chore reminders, completions, rotations and chores point at the household and at users, so they go first.
+        choreService.deleteForHousehold(householdId);
         membershipRepository.deleteByHouseholdId(householdId);
         householdRepository.delete(household);
     }

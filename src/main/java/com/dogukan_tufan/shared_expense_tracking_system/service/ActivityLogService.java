@@ -5,6 +5,7 @@ import com.dogukan_tufan.shared_expense_tracking_system.dto.activity.FieldChange
 import com.dogukan_tufan.shared_expense_tracking_system.dto.activity.FieldChangeResponse;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.ActivityLog;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.ActivityType;
+import com.dogukan_tufan.shared_expense_tracking_system.entity.Chore;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.Expense;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.ExpenseCategory;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.ExpenseShare;
@@ -37,6 +38,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 // Writes and reads the household activity history ("Bulent changed Rent: amount ...").
 //
@@ -60,7 +62,11 @@ public class ActivityLogService {
     // Matches the label column length in ActivityLog.
     private static final int LABEL_MAX_LENGTH = 200;
     // Field names whose stored values are user ids, and which the read endpoint turns into names.
-    private static final Set<String> PERSON_FIELDS = Set.of("paidBy", "fromUser", "toUser");
+    // currentUser (chores) is a person id too, so the read endpoint turns it into a name.
+    private static final Set<String> PERSON_FIELDS = Set.of("paidBy", "fromUser", "toUser", "currentUser");
+    // Fields whose value is a comma-separated list of user ids (a chore's rotation, in turn order).
+    // Old rows stored this field without values (null); those are passed through unchanged.
+    private static final Set<String> PERSON_LIST_FIELDS = Set.of("rotation");
     // How far a share may differ from its proportional value before it counts as changed (5 kurus).
     // Why: the proportional value is rounded to cents, so a tiny difference must not count as a change.
     private static final BigDecimal SHARE_TOLERANCE = new BigDecimal("0.05");
@@ -230,6 +236,75 @@ public class ActivityLogService {
                 .paymentId(payment.getId());
     }
 
+    // ---------- Chores ----------
+
+    public void choreAdded(Chore chore, User actor) {
+        activityLogRepository.save(ActivityLog.builder()
+                .household(chore.getHousehold())
+                .type(ActivityType.CHORE_ADDED)
+                .actorUserId(actor.getId())
+                .label(cut(chore.getName()))
+                .build());
+    }
+
+    // The caller takes both snapshots (before and after the change). Nothing is written when no field changed.
+    // currentUserSetByHand is true only when the request named the current person. An automatic change
+    // (the person left, so the next one took over) is not logged as a manual change.
+    public void choreUpdated(Chore chore, User actor, ChoreSnapshot before, ChoreSnapshot after,
+                             boolean currentUserSetByHand) {
+        List<FieldChange> changes = choreChanges(before, after, currentUserSetByHand);
+        if (changes.isEmpty()) {
+            return;
+        }
+        activityLogRepository.save(ActivityLog.builder()
+                .household(chore.getHousehold())
+                .type(ActivityType.CHORE_UPDATED)
+                .actorUserId(actor.getId())
+                .label(cut(chore.getName()))
+                .changes(toJson(changes))
+                .build());
+    }
+
+    public void choreDeleted(Chore chore, User actor) {
+        activityLogRepository.save(ActivityLog.builder()
+                .household(chore.getHousehold())
+                .type(ActivityType.CHORE_DELETED)
+                .actorUserId(actor.getId())
+                .label(cut(chore.getName()))
+                .build());
+    }
+
+    // Marking a chore done is NOT written here. It repeats every few days, so it would flood the history.
+    // The "recent completions" list on the chore already shows it.
+
+    // Snapshot of a chore's values, copied so the later change does not affect it.
+    // rotationUserIds is in turn order, so a change of order counts as a rotation change.
+    public record ChoreSnapshot(String name, List<Long> rotationUserIds, Long currentUserId) {
+
+        public static ChoreSnapshot of(Chore chore, List<Long> rotationUserIds) {
+            return new ChoreSnapshot(
+                    chore.getName(),
+                    List.copyOf(rotationUserIds),
+                    chore.getCurrentUser() == null ? null : chore.getCurrentUser().getId());
+        }
+    }
+
+    private static List<FieldChange> choreChanges(ChoreSnapshot before, ChoreSnapshot after,
+                                                  boolean currentUserSetByHand) {
+        List<FieldChange> changes = new ArrayList<>();
+        addChange(changes, "name", before.name(), after.name());
+        // The people and their order are one change. The values are the user ids in turn order
+        // ("1,2,3"); the read endpoint turns them into names ("Doğukan, Bülent, Hatem").
+        if (!before.rotationUserIds().equals(after.rotationUserIds())) {
+            changes.add(new FieldChange("rotation", idListText(before.rotationUserIds()),
+                    idListText(after.rotationUserIds()), null));
+        }
+        if (currentUserSetByHand) {
+            addChange(changes, "currentUser", idText(before.currentUserId()), idText(after.currentUserId()));
+        }
+        return changes;
+    }
+
     // ---------- Cleanup ----------
 
     // Called by HouseholdService.purgeHousehold before the household row is deleted (foreign key).
@@ -264,6 +339,10 @@ public class ActivityLogService {
                 if (PERSON_FIELDS.contains(change.field())) {
                     addUserId(userIds, parseId(change.oldValue()));
                     addUserId(userIds, parseId(change.newValue()));
+                }
+                if (PERSON_LIST_FIELDS.contains(change.field())) {
+                    parseIdList(change.oldValue()).forEach(id -> addUserId(userIds, id));
+                    parseIdList(change.newValue()).forEach(id -> addUserId(userIds, id));
                 }
                 // A "share" change keeps its person's id in userId (its values are amounts, not ids).
                 addUserId(userIds, change.userId());
@@ -307,6 +386,10 @@ public class ActivityLogService {
             // A "share" change: the values stay amounts, and the person's current name is added.
             return new FieldChangeResponse(change.field(), change.oldValue(), change.newValue(),
                     change.userId(), nameOf(change.userId(), names));
+        }
+        if (PERSON_LIST_FIELDS.contains(change.field())) {
+            return new FieldChangeResponse(change.field(), namesOf(change.oldValue(), names),
+                    namesOf(change.newValue(), names), null, null);
         }
         if (!PERSON_FIELDS.contains(change.field())) {
             return new FieldChangeResponse(change.field(), change.oldValue(), change.newValue(), null, null);
@@ -501,6 +584,34 @@ public class ActivityLogService {
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    private static String idListText(List<Long> userIds) {
+        return userIds.stream().map(String::valueOf).collect(Collectors.joining(","));
+    }
+
+    private static List<Long> parseIdList(String text) {
+        if (text == null || text.isBlank()) {
+            return List.of();
+        }
+        List<Long> ids = new ArrayList<>();
+        for (String part : text.split(",")) {
+            Long id = parseId(part.trim());
+            if (id != null) {
+                ids.add(id);
+            }
+        }
+        return ids;
+    }
+
+    // "1,2,3" -> "Doğukan, Bülent, Hatem". Null stays null (old rows had no values).
+    private static String namesOf(String idList, Map<Long, String> names) {
+        if (idList == null) {
+            return null;
+        }
+        return parseIdList(idList).stream()
+                .map(id -> names.getOrDefault(id, "?"))
+                .collect(Collectors.joining(", "));
     }
 
     private static String nameOf(Long userId, Map<Long, String> names) {

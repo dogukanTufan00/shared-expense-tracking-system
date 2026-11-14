@@ -8,6 +8,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -23,8 +24,13 @@ import java.time.Instant;
 // Rows are never deleted when an invitation is declined or cancelled; only the status changes.
 // That keeps an audit trail of who invited whom and what the answer was -- the same idea as
 // Membership.leftAt, where a left member's row is kept instead of being removed.
+// Why the indexes: PostgreSQL does not index foreign keys by itself. Invitations are listed per
+// household and per invited user ("my invitations"), so both columns get an index.
 @Entity
-@Table(name = "invitations")
+@Table(name = "invitations", indexes = {
+        @Index(name = "idx_invitations_household_id", columnList = "household_id"),
+        @Index(name = "idx_invitations_invited_user_id", columnList = "invited_user_id")
+})
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Invitation {

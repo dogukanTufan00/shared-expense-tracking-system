@@ -25,6 +25,7 @@ public class MembershipService {
     private final MembershipRepository membershipRepository;
     private final HouseholdAccessService accessService;
     private final ActivityLogService activityLogService;
+    private final ChoreService choreService;
 
     public List<MemberResponse> listActiveMembers(Long householdId, String currentUserEmail) {
         User currentUser = getUser(currentUserEmail);
@@ -64,6 +65,8 @@ public class MembershipService {
 
         // Soft delete: leftAt set, row kept. Past expenses still point at a real Membership/User.
         targetMembership.setLeftAt(Instant.now());
+        // Takes the person off the household's chore rotations, so they are not expected to do chores anymore.
+        choreService.removeFromRotations(householdId, targetUserId);
 
         if (isLeaving) {
             activityLogService.memberLeft(targetMembership.getHousehold(), currentUser);
