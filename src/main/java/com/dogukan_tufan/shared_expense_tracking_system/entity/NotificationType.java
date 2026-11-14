@@ -12,5 +12,6 @@ public enum NotificationType {
     EXPENSE_UPDATED,
     PAYMENT_UPDATED,
     CHORE_TURN,
-    CHORE_REMINDER
+    CHORE_REMINDER,
+    BILL_DUE_SOON
 }

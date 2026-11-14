@@ -19,6 +19,7 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 // Why the indexes: PostgreSQL does not index foreign keys by itself, and the expense lists and balances
@@ -73,6 +74,18 @@ public class Expense {
     @Column(name = "recurrence_day")
     private Integer recurrenceDay;
 
+    // Days before the due date to send a "bill due soon" push: 0 = off, otherwise 1, 3 or 7.
+    // Null for rows created before this column existed; effectiveReminderDaysBefore() handles that.
+    @Setter
+    @Column(name = "reminder_days_before")
+    private Integer reminderDaysBefore;
+
+    // The due date a reminder was already sent for. Kept on the chain end only; a newly generated copy
+    // starts with null, so each due date is reminded at most once without an extra table.
+    @Setter
+    @Column(name = "bill_reminder_sent_for")
+    private LocalDate billReminderSentFor;
+
     // The expense this one was copied from by the recurring job. Null for expenses a user created.
     @Setter
     @ManyToOne(fetch = FetchType.LAZY)
@@ -95,6 +108,12 @@ public class Expense {
 
     public SplitType getSplitType() {
         return splitType == null ? SplitType.EQUAL : splitType;
+    }
+
+    // Why a method: rows created before the column existed are null, and the default (3 days) lives
+    // in the app, not in the database.
+    public int effectiveReminderDaysBefore() {
+        return reminderDaysBefore == null ? 3 : reminderDaysBefore;
     }
 
     public Expense(Household household, User paidBy, BigDecimal amount, ExpenseCategory category,

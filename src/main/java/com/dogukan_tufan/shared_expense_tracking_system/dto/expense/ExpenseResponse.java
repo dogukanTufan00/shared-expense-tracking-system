@@ -29,7 +29,9 @@ public record ExpenseResponse(
         // Id of the expense this one was generated from by the recurring job. Null for manual expenses.
         Long generatedFromId,
         // Day of month of the recurring chain (null when the expense was never part of a chain).
-        Integer recurrenceDay
+        Integer recurrenceDay,
+        // Days before the due date a bill reminder is sent (0 = off). Always filled in, default 3.
+        int reminderDaysBefore
 ) {
 
     // The shares and the count are passed in (not loaded here) so the service can fetch them
@@ -50,6 +52,7 @@ public record ExpenseResponse(
                 shares.stream().map(ShareResponse::from).toList(),
                 attachmentCount,
                 expense.getGeneratedFrom() == null ? null : expense.getGeneratedFrom().getId(),
-                expense.getRecurrenceDay());
+                expense.getRecurrenceDay(),
+                expense.effectiveReminderDaysBefore());
     }
 }

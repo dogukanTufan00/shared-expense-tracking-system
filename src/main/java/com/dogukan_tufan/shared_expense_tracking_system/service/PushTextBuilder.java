@@ -108,7 +108,30 @@ public class PushTextBuilder {
                             actor + " nazikçe hatırlatıyor: \"" + detail + "\" sırası sende.")
                     : new PushText("Reminder " + DOT + " " + household,
                             actor + " is gently reminding you: it's your turn for \"" + detail + "\".");
+
+            // Title: the bill name when there is a description (otherwise just "Upcoming bill").
+            // Body: the payer sees "you pay it"; everyone else sees who pays and their own share.
+            case BILL_DUE_SOON -> {
+                String title = (tr ? "Yaklaşan ödeme" : "Upcoming bill") + (hasDetail ? ": " + detail : "");
+                String when = daysLeftText(notification.getDaysLeft(), tr);
+                if (notification.getShareAmount() == null) {
+                    String sentence = tr ? "ödeme sende" : "you pay it";
+                    yield new PushText(title, when + " " + DOT + " " + amount + " " + DOT + " " + sentence);
+                }
+                String share = formatMoney(notification.getShareAmount(), tr);
+                String sentence = tr ? " ödüyor · payın " : " pays · your share ";
+                yield new PushText(title, when + " " + DOT + " " + actor + sentence + share);
+            }
         };
+    }
+
+    // "Yarın" / "Tomorrow" for one day, otherwise "3 gün sonra" / "in 3 days".
+    private static String daysLeftText(Integer daysLeft, boolean tr) {
+        int days = daysLeft == null ? 0 : daysLeft;
+        if (tr) {
+            return days == 1 ? "Yarın" : days + " gün sonra";
+        }
+        return days == 1 ? "Tomorrow" : "in " + days + " days";
     }
 
     // Puts the note on its own line inside curly quotes (U+201C and U+201D).

@@ -38,6 +38,10 @@ public record ExpenseRequest(
 
         // Optional. EQUAL: who shares it. PERCENT/AMOUNT: each person's percentage or amount.
         @Valid
-        List<ShareInput> shares
+        List<ShareInput> shares,
+
+        // Optional. Days before the due date for a bill reminder: 0 (off), 1, 3 or 7. Missing = 3 on
+        // create, and "keep the stored value" on update. The service checks the allowed values.
+        Integer reminderDaysBefore
 ) {
 }

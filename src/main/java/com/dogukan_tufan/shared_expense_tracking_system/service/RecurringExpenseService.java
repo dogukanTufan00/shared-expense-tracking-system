@@ -51,6 +51,7 @@ public class RecurringExpenseService {
     private final HouseholdAccessService accessService;
     private final ExpenseService expenseService;
     private final TransactionTemplate transactionTemplate;
+    private final BillReminderService billReminderService;
 
     // Daily at 00:05 Turkish time. Needs @EnableScheduling on the application class.
     @Scheduled(cron = "0 5 0 * * *", zone = "Europe/Istanbul")
@@ -99,7 +100,10 @@ public class RecurringExpenseService {
         List<Long> chainEndIds = expenseRepository.findByHouseholdIdAndRecurringTrue(householdId).stream()
                 .map(Expense::getId)
                 .toList();
-        return new RecurringRunResponse(generateForChains(chainEndIds));
+        // Generate first, then remind: a copy created just now may already be due soon.
+        int generated = generateForChains(chainEndIds);
+        int remindersSent = billReminderService.sendDueRemindersForHousehold(householdId);
+        return new RecurringRunResponse(generated, remindersSent);
     }
 
     // Read side: every chain end of this household, with the date its next copy will get.
@@ -118,7 +122,8 @@ public class RecurringExpenseService {
                         expense.getPaidBy().getName(),
                         recurrenceDayOf(expense),
                         expense.getExpenseDate(),
-                        nextDateAfter(expense)))
+                        nextDateAfter(expense),
+                        expense.effectiveReminderDaysBefore()))
                 .toList();
     }
 
@@ -196,7 +201,8 @@ public class RecurringExpenseService {
     // Same time of day, one month later, on the chain's day. A shorter month uses its last day.
     // Example: day 31 -> 28 Feb -> 31 Mar. The day comes from the chain, not from the previous copy,
     // so the 28 Feb clamp does not move the chain to the 28th for good.
-    private static LocalDateTime nextDateAfter(Expense previous) {
+    // Package-private so BillReminderService uses the same rule for the due date (no second copy of it).
+    static LocalDateTime nextDateAfter(Expense previous) {
         LocalDate nextMonth = previous.getExpenseDate().toLocalDate().plusMonths(1);
         int day = Math.min(recurrenceDayOf(previous), nextMonth.lengthOfMonth());
         return nextMonth.withDayOfMonth(day).atTime(previous.getExpenseDate().toLocalTime());

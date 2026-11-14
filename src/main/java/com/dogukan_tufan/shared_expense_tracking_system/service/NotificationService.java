@@ -47,6 +47,7 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -376,6 +377,31 @@ public class NotificationService {
                 .actorName(reminder.getSender().getName())
                 .detail(truncate(chore.getName()))
                 .build()));
+    }
+
+    // Called by BillReminderService inside its own transaction. The rows are saved there, and the caller
+    // sends the pushes only after that transaction has committed (same rule as the listeners above).
+    // shares: recipient -> their share, or null when the payer pays the whole bill.
+    public List<Notification> saveBillDueSoon(Expense chainEnd, int daysLeft, Map<User, BigDecimal> shares) {
+        Household household = chainEnd.getHousehold();
+        User payer = chainEnd.getPaidBy();
+
+        List<Notification> created = new ArrayList<>();
+        for (Map.Entry<User, BigDecimal> entry : shares.entrySet()) {
+            created.add(notificationRepository.save(Notification.builder()
+                    .recipient(entry.getKey())
+                    .household(household)
+                    .type(NotificationType.BILL_DUE_SOON)
+                    .householdName(household.getName())
+                    .actorName(payer.getName())
+                    .amount(chainEnd.getAmount())
+                    .detail(truncate(chainEnd.getDescription()))
+                    .expenseId(chainEnd.getId())
+                    .daysLeft(daysLeft)
+                    .shareAmount(entry.getValue())
+                    .build()));
+        }
+        return created;
     }
 
     // ---------- Reading and marking (the inbox endpoints) ----------

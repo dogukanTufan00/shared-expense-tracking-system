@@ -85,6 +85,15 @@ public class Notification {
     @Column(name = "invitation_id")
     private Long invitationId;
 
+    // Only for BILL_DUE_SOON: whole days until the due date (1 = tomorrow). Null for every other type.
+    @Column(name = "days_left")
+    private Integer daysLeft;
+
+    // Only for BILL_DUE_SOON: this person's share. Null means "the payer pays it" (the bill is theirs
+    // to pay), so the text says so instead of showing an amount.
+    @Column(name = "share_amount", precision = 12, scale = 2)
+    private BigDecimal shareAmount;
+
     // Named is_read because READ is a keyword in some databases and SQL tools.
     @Column(name = "is_read", nullable = false)
     private boolean read;
@@ -95,7 +104,8 @@ public class Notification {
     @Builder
     public Notification(User recipient, Household household, NotificationType type, String householdName,
                         String actorName, String targetName, BigDecimal amount, BigDecimal previousAmount,
-                        String detail, Long expenseId, Long paymentId, Long invitationId) {
+                        String detail, Long expenseId, Long paymentId, Long invitationId,
+                        Integer daysLeft, BigDecimal shareAmount) {
         this.recipient = recipient;
         this.household = household;
         this.type = type;
@@ -108,6 +118,8 @@ public class Notification {
         this.expenseId = expenseId;
         this.paymentId = paymentId;
         this.invitationId = invitationId;
+        this.daysLeft = daysLeft;
+        this.shareAmount = shareAmount;
         this.read = false;
         this.createdAt = Instant.now();
     }

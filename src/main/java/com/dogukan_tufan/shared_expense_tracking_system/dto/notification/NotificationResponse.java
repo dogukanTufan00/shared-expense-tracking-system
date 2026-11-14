@@ -23,7 +23,11 @@ public record NotificationResponse(
         Long paymentId,
         Long invitationId,
         boolean read,
-        Instant createdAt
+        Instant createdAt,
+        // Only for BILL_DUE_SOON. daysLeft: days until the due date. shareAmount: this person's share,
+        // null when the payer pays it. Null for every other type.
+        Integer daysLeft,
+        BigDecimal shareAmount
 ) {
 
     public static NotificationResponse from(Notification notification) {
@@ -41,6 +45,8 @@ public record NotificationResponse(
                 notification.getPaymentId(),
                 notification.getInvitationId(),
                 notification.isRead(),
-                notification.getCreatedAt());
+                notification.getCreatedAt(),
+                notification.getDaysLeft(),
+                notification.getShareAmount());
     }
 }

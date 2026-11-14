@@ -16,6 +16,8 @@ public record RecurringExpenseResponse(
         String paidByName,
         int recurrenceDay,
         LocalDateTime lastDate,
-        LocalDateTime nextDate
+        LocalDateTime nextDate,
+        // Days before the due date a bill reminder is sent (0 = off). Default 3.
+        int reminderDaysBefore
 ) {
 }

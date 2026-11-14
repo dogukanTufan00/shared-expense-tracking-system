@@ -34,10 +34,11 @@ public class RecurringExpenseController {
     }
 
     @PostMapping("/run")
-    @Operation(summary = "Create due recurring expenses now (ADMIN only)",
+    @Operation(summary = "Create due recurring expenses and send due bill reminders now (ADMIN only)",
             description = "For demos and testing only. Recurring expenses are normally created by the daily "
                     + "job at 00:05 (Europe/Istanbul), so without this you would have to wait a month to see "
-                    + "the next copy. Runs the same generation, but only for this household.")
+                    + "the next copy. Runs the same generation, but only for this household. Then sends the "
+                    + "bill-due-soon reminders that are due now (remindersSent in the response).")
     public RecurringRunResponse runNow(@PathVariable Long householdId, Authentication authentication) {
         return recurringExpenseService.runForHousehold(householdId, authentication.getName());
     }

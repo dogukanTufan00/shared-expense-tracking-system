@@ -47,6 +47,10 @@ public class ExpenseService {
 
     private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
 
+    // Bill reminder choices (days before the due date). 0 turns reminders off.
+    private static final List<Integer> ALLOWED_REMINDER_DAYS = List.of(0, 1, 3, 7);
+    private static final int DEFAULT_REMINDER_DAYS = 3;
+
     private final UserRepository userRepository;
     private final ExpenseRepository expenseRepository;
     private final ExpenseShareRepository expenseShareRepository;
@@ -63,6 +67,7 @@ public class ExpenseService {
     public ExpenseResponse create(Long householdId, ExpenseRequest request, String currentUserEmail) {
         User currentUser = getUser(currentUserEmail);
         Membership requesterMembership = accessService.requireActiveMembership(currentUser.getId(), householdId);
+        requireValidReminderDays(request.reminderDaysBefore());
 
         Membership payerMembership = requireActivePayer(householdId, request.paidByUserId());
         BigDecimal amount = request.amount().setScale(2, RoundingMode.HALF_UP);
@@ -80,6 +85,8 @@ public class ExpenseService {
                 request.expenseDate());
         expense.setSplitType(plan.splitType());
         ensureRecurrenceDay(expense);
+        // Null from the client means the default of 3 days.
+        expense.setReminderDaysBefore(request.reminderDaysBefore() == null ? DEFAULT_REMINDER_DAYS : request.reminderDaysBefore());
         expenseRepository.save(expense);
 
         List<ExpenseShare> shares = recalculateShares(expense, plan.shares());
@@ -120,6 +127,7 @@ public class ExpenseService {
     public ExpenseResponse update(Long householdId, Long expenseId, ExpenseRequest request, String currentUserEmail) {
         User currentUser = getUser(currentUserEmail);
         Membership requesterMembership = accessService.requireActiveMembership(currentUser.getId(), householdId);
+        requireValidReminderDays(request.reminderDaysBefore());
 
         Expense expense = findExpense(householdId, expenseId);
         requirePayerOrAdmin(expense, currentUser, requesterMembership);
@@ -150,6 +158,10 @@ public class ExpenseService {
         expense.setExpenseDate(request.expenseDate());
         expense.setSplitType(plan.splitType());
         ensureRecurrenceDay(expense);
+        // Null from the client keeps the stored value (see Expense.effectiveReminderDaysBefore).
+        if (request.reminderDaysBefore() != null) {
+            expense.setReminderDaysBefore(request.reminderDaysBefore());
+        }
 
         List<ExpenseShare> shares = recalculateShares(expense, plan.shares());
         boolean written = activityLogService.expenseUpdated(expense, currentUser, before, shares);
@@ -208,6 +220,8 @@ public class ExpenseService {
                 nextDate);
         copy.setSplitType(plan.splitType());
         copy.setRecurrenceDay(previous.getRecurrenceDay());
+        copy.setReminderDaysBefore(previous.effectiveReminderDaysBefore());
+        // billReminderSentFor stays null on the copy: its due date is new, so it is reminded again.
         copy.setGeneratedFrom(previous);
         expenseRepository.save(copy);
 
@@ -443,6 +457,13 @@ public class ExpenseService {
             userIds.add(share.getUser().getId());
         }
         return userIds;
+    }
+
+    // null means "not sent" and is allowed (create uses the default, update keeps the stored value).
+    private static void requireValidReminderDays(Integer days) {
+        if (days != null && !ALLOWED_REMINDER_DAYS.contains(days)) {
+            throw new BadRequestException("reminderDaysBefore must be 0, 1, 3 or 7");
+        }
     }
 
     private boolean hasShares(List<ShareInput> shares) {
