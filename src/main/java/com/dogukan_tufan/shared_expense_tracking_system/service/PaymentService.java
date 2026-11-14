@@ -48,13 +48,9 @@ public class PaymentService {
             throw new BadRequestException("fromUserId and toUserId must be different");
         }
 
-        // Same rule as delete below: you can only record a payment you made yourself, unless you
-        // are an admin. Otherwise any member could log "A paid B" for two other people.
-        boolean isSender = request.fromUserId().equals(currentUser.getId());
-        boolean isAdmin = requesterMembership.getRole() == MembershipRole.ADMIN;
-        if (!isSender && !isAdmin) {
-            throw new ForbiddenActionException("Only the sender or a household admin can record this payment");
-        }
+        // Only the two people the money is between may record it (see requireSenderOrReceiver).
+        requireSenderOrReceiver(householdId, request.fromUserId(), request.toUserId(), currentUser,
+                requesterMembership, "record");
 
         // Former members are allowed here: someone who moved out can still owe or be owed money,
         // and that debt must be settleable. The requester above must still be an active member.
@@ -92,10 +88,9 @@ public class PaymentService {
         return toResponse(payment);
     }
 
-    // Edit rules mirror create and delete:
-    // - only the original sender or an admin may edit (a plain member cannot rewrite someone else's payment);
-    // - a non-admin cannot hand the payment to someone else: the new sender must be the requester too,
-    //   otherwise a member could use edit to make other people look like they paid.
+    // Edit rules mirror create and delete: the requester must be the sender or the receiver of the
+    // payment as it is now AND as it will be after the edit. Otherwise someone could use edit to move
+    // a payment between two other people.
     // paidAt is not touched (Payment.update does not change it), so the original payment time is kept.
     public PaymentResponse update(Long householdId, Long paymentId, PaymentRequest request, String currentUserEmail) {
         User currentUser = getUser(currentUserEmail);
@@ -104,14 +99,10 @@ public class PaymentService {
         Payment payment = paymentRepository.findByIdAndHouseholdId(paymentId, householdId)
                 .orElseThrow(() -> new ResourceNotFoundException("Payment not found: " + paymentId));
 
-        boolean isOriginalSender = payment.getFromUser().getId().equals(currentUser.getId());
-        boolean isAdmin = requesterMembership.getRole() == MembershipRole.ADMIN;
-        if (!isOriginalSender && !isAdmin) {
-            throw new ForbiddenActionException("Only the sender or a household admin can edit this payment");
-        }
-        if (!isAdmin && !request.fromUserId().equals(currentUser.getId())) {
-            throw new ForbiddenActionException("Only a household admin can change the sender to another member");
-        }
+        requireSenderOrReceiver(householdId, payment.getFromUser().getId(), payment.getToUser().getId(),
+                currentUser, requesterMembership, "edit");
+        requireSenderOrReceiver(householdId, request.fromUserId(), request.toUserId(), currentUser,
+                requesterMembership, "edit");
 
         if (request.fromUserId().equals(request.toUserId())) {
             throw new BadRequestException("fromUserId and toUserId must be different");
@@ -143,12 +134,8 @@ public class PaymentService {
         Payment payment = paymentRepository.findByIdAndHouseholdId(paymentId, householdId)
                 .orElseThrow(() -> new ResourceNotFoundException("Payment not found: " + paymentId));
 
-        // Mirrors the Expense rule: whoever logged the payment (the sender) or an admin can undo it.
-        boolean isSender = payment.getFromUser().getId().equals(currentUser.getId());
-        boolean isAdmin = requesterMembership.getRole() == MembershipRole.ADMIN;
-        if (!isSender && !isAdmin) {
-            throw new ForbiddenActionException("Only the sender or a household admin can remove this payment");
-        }
+        requireSenderOrReceiver(householdId, payment.getFromUser().getId(), payment.getToUser().getId(),
+                currentUser, requesterMembership, "remove");
 
         // Recorded first, while the payment still has its amount and both people.
         activityLogService.paymentDeleted(payment, currentUser);
@@ -161,6 +148,29 @@ public class PaymentService {
     private PaymentResponse toResponse(Payment payment) {
         int attachmentCount = (int) attachmentRepository.countByPaymentId(payment.getId());
         return PaymentResponse.from(payment, attachmentCount);
+    }
+
+    // A payment is a matter between two people, so only the sender or the receiver may record, edit
+    // or remove it. Being an admin is not enough: in a home where several people are admins, one of
+    // them could otherwise mark someone else's debt as paid.
+    // The one exception: if the sender or the receiver is no longer in the home (moved out or deleted
+    // the account), an admin may step in, so an old debt can still be settled.
+    private void requireSenderOrReceiver(Long householdId, Long fromUserId, Long toUserId, User currentUser,
+                                         Membership requesterMembership, String action) {
+        Long me = currentUser.getId();
+        if (me.equals(fromUserId) || me.equals(toUserId)) {
+            return;
+        }
+        boolean isAdmin = requesterMembership.getRole() == MembershipRole.ADMIN;
+        boolean someoneLeft = !isActiveMember(householdId, fromUserId) || !isActiveMember(householdId, toUserId);
+        if (isAdmin && someoneLeft) {
+            return;
+        }
+        throw new ForbiddenActionException("Only the sender or the receiver can " + action + " this payment");
+    }
+
+    private boolean isActiveMember(Long householdId, Long userId) {
+        return membershipRepository.findByUserIdAndHouseholdIdAndLeftAtIsNull(userId, householdId).isPresent();
     }
 
     private User requireMember(Long householdId, Long userId) {
