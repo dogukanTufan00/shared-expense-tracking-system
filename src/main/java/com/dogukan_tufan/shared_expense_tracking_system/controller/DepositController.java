@@ -37,7 +37,7 @@ public class DepositController {
     }
 
     @PutMapping
-    @Operation(summary = "Set or correct the deposit by hand (admin only). Shares must add up to the total")
+    @Operation(summary = "Set or correct the deposit by hand (any active member; logged in the activity history). Shares must add up to the total")
     public DepositResponse update(@PathVariable Long householdId, @Valid @RequestBody UpdateDepositRequest request,
                                   Authentication authentication) {
         return depositService.update(householdId, request, authentication.getName());
