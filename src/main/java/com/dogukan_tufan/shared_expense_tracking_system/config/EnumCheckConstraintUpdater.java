@@ -1,6 +1,7 @@
 package com.dogukan_tufan.shared_expense_tracking_system.config;
 
 import com.dogukan_tufan.shared_expense_tracking_system.entity.ActivityType;
+import com.dogukan_tufan.shared_expense_tracking_system.entity.ExpenseCategory;
 import com.dogukan_tufan.shared_expense_tracking_system.entity.NotificationType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,7 +32,11 @@ public class EnumCheckConstraintUpdater implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         List<EnumColumn> columns = List.of(
                 new EnumColumn("notifications", "type", "notifications_type_check", NotificationType.values()),
-                new EnumColumn("activity_logs", "type", "activity_logs_type_check", ActivityType.values()));
+                new EnumColumn("activity_logs", "type", "activity_logs_type_check", ActivityType.values()),
+                // Expense categories are used in two tables: the expenses and the per-category split defaults.
+                new EnumColumn("expenses", "category", "expenses_category_check", ExpenseCategory.values()),
+                new EnumColumn("category_split_defaults", "category", "category_split_defaults_category_check",
+                        ExpenseCategory.values()));
         // Each column is handled on its own, so a problem with one does not stop the other.
         for (EnumColumn column : columns) {
             rebuildConstraint(column);
