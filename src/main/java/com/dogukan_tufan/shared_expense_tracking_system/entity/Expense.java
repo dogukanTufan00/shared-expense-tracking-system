@@ -60,6 +60,12 @@ public class Expense {
     @Column
     private String description;
 
+    // Optional list of products, one per line (filled from a scanned receipt, a shopping list checkout,
+    // or typed by hand). TEXT because up to 2000 characters do not fit in a normal VARCHAR(255).
+    @Setter
+    @Column(name = "items_text", columnDefinition = "TEXT")
+    private String itemsText;
+
     // Only the LAST expense of a recurring chain has recurring=true. When RecurringExpenseService
     // generates the next month, it moves the flag to the new copy. One flag on one row means there
     // is exactly one place that decides "does this chain still repeat", and no duplicate generation.

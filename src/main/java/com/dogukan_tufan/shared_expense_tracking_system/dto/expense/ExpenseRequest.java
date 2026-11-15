@@ -6,6 +6,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -42,6 +43,10 @@ public record ExpenseRequest(
 
         // Optional. Days before the due date for a bill reminder: 0 (off), 1, 3 or 7. Missing = 3 on
         // create, and "keep the stored value" on update. The service checks the allowed values.
-        Integer reminderDaysBefore
+        Integer reminderDaysBefore,
+
+        // Optional. Products bought, one per line. Missing or blank = no product list.
+        @Size(max = 2000, message = "itemsText must be at most 2000 characters")
+        String itemsText
 ) {
 }

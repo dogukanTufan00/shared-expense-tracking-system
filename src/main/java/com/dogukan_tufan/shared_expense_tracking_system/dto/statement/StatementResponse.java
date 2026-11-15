@@ -78,6 +78,8 @@ public record StatementResponse(
             Long id,
             LocalDateTime date,
             String description,
+            // Products, one per line (null when none). Printed in the PDF statement.
+            String itemsText,
             ExpenseCategory category,
             BigDecimal amount,
             String paidByName,

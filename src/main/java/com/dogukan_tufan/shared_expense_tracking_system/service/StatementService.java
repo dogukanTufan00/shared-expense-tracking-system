@@ -256,6 +256,7 @@ public class StatementService {
                         e.getId(),
                         e.getExpenseDate(),
                         e.getDescription(),
+                        e.getItemsText(),
                         e.getCategory(),
                         e.getAmount(),
                         e.getPaidBy().getName(),

@@ -31,7 +31,9 @@ public record ExpenseResponse(
         // Day of month of the recurring chain (null when the expense was never part of a chain).
         Integer recurrenceDay,
         // Days before the due date a bill reminder is sent (0 = off). Always filled in, default 3.
-        int reminderDaysBefore
+        int reminderDaysBefore,
+        // Products bought, one per line. Null when none were entered.
+        String itemsText
 ) {
 
     // The shares and the count are passed in (not loaded here) so the service can fetch them
@@ -53,6 +55,7 @@ public record ExpenseResponse(
                 attachmentCount,
                 expense.getGeneratedFrom() == null ? null : expense.getGeneratedFrom().getId(),
                 expense.getRecurrenceDay(),
-                expense.effectiveReminderDaysBefore());
+                expense.effectiveReminderDaysBefore(),
+                expense.getItemsText());
     }
 }

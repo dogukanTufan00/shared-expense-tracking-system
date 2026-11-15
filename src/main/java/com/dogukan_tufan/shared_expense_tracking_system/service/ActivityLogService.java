@@ -480,6 +480,12 @@ public class ActivityLogService {
         List<FieldChange> changes = new ArrayList<>();
         addAmountChange(changes, "amount", before.amount(), after.amount());
         addChange(changes, "description", before.description(), after.description());
+        // The products text can be 2000 characters, so the history stores only the number of lines.
+        // It is recorded whenever the text changed, even if the line count stayed the same.
+        if (!Objects.equals(before.itemsText(), after.itemsText())) {
+            changes.add(new FieldChange("itemsText", itemsLineCountText(before.itemsText()),
+                    itemsLineCountText(after.itemsText()), null));
+        }
         addChange(changes, "category", enumText(before.category()), enumText(after.category()));
         addChange(changes, "expenseDate", dateText(before.expenseDate()), dateText(after.expenseDate()));
         addChange(changes, "paidBy", idText(before.paidByUserId()), idText(after.paidByUserId()));
@@ -584,7 +590,7 @@ public class ActivityLogService {
 
     // Snapshot of an expense's values, copied out of the entity so later changes do not affect it.
     public record ExpenseSnapshot(Long paidByUserId, BigDecimal amount, ExpenseCategory category,
-                                  String description, boolean recurring, LocalDateTime expenseDate,
+                                  String description, String itemsText, boolean recurring, LocalDateTime expenseDate,
                                   SplitType splitType, Map<Long, BigDecimal> owedByUserId) {
 
         // Call this BEFORE changing the expense, and again after the change with the new shares.
@@ -598,6 +604,7 @@ public class ActivityLogService {
                     expense.getAmount(),
                     expense.getCategory(),
                     expense.getDescription(),
+                    ExpenseService.normalizeItemsText(expense.getItemsText()),
                     expense.isRecurring(),
                     expense.getExpenseDate(),
                     expense.getSplitType(),
@@ -631,6 +638,15 @@ public class ActivityLogService {
 
     private static String enumText(Enum<?> value) {
         return value == null ? null : value.name();
+    }
+
+    // Number of non-empty lines of the products text, as text ("3"). Null when there is no text.
+    private static String itemsLineCountText(String itemsText) {
+        if (itemsText == null) {
+            return null;
+        }
+        long lines = itemsText.lines().filter(line -> !line.isBlank()).count();
+        return lines == 0 ? null : String.valueOf(lines);
     }
 
     private static String dateText(Object value) {

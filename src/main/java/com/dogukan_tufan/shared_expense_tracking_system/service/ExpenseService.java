@@ -84,6 +84,7 @@ public class ExpenseService {
                 request.recurring(),
                 request.expenseDate());
         expense.setSplitType(plan.splitType());
+        expense.setItemsText(normalizeItemsText(request.itemsText()));
         ensureRecurrenceDay(expense);
         // Null from the client means the default of 3 days.
         expense.setReminderDaysBefore(request.reminderDaysBefore() == null ? DEFAULT_REMINDER_DAYS : request.reminderDaysBefore());
@@ -154,6 +155,7 @@ public class ExpenseService {
         expense.setAmount(newAmount);
         expense.setCategory(request.category());
         expense.setDescription(request.description());
+        expense.setItemsText(normalizeItemsText(request.itemsText()));
         expense.setRecurring(request.recurring());
         expense.setExpenseDate(request.expenseDate());
         expense.setSplitType(plan.splitType());
@@ -220,6 +222,7 @@ public class ExpenseService {
                 nextDate);
         copy.setSplitType(plan.splitType());
         copy.setRecurrenceDay(previous.getRecurrenceDay());
+        copy.setItemsText(previous.getItemsText());
         copy.setReminderDaysBefore(previous.effectiveReminderDaysBefore());
         // billReminderSentFor stays null on the copy: its due date is new, so it is reminded again.
         copy.setGeneratedFrom(previous);
@@ -457,6 +460,16 @@ public class ExpenseService {
             userIds.add(share.getUser().getId());
         }
         return userIds;
+    }
+
+    // Products text as stored: Windows line endings become "\n", surrounding whitespace is removed,
+    // and blank means "no product list" (null). Public so ActivityLogService compares the same form.
+    public static String normalizeItemsText(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String text = raw.replace("\r\n", "\n").replace('\r', '\n').trim();
+        return text.isEmpty() ? null : text;
     }
 
     // null means "not sent" and is allowed (create uses the default, update keeps the stored value).

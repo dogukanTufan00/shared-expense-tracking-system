@@ -1,5 +1,6 @@
 package com.dogukan_tufan.shared_expense_tracking_system.service;
 
+import com.dogukan_tufan.shared_expense_tracking_system.dto.expense.ExpenseRequest;
 import com.dogukan_tufan.shared_expense_tracking_system.dto.expense.ExpenseResponse;
 import com.dogukan_tufan.shared_expense_tracking_system.dto.shopping.ShoppingCheckoutRequest;
 import com.dogukan_tufan.shared_expense_tracking_system.dto.shopping.ShoppingItemRequest;
@@ -23,6 +24,7 @@ import java.time.Instant;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 // The shared shopping list ("Sut", "Deterjan"). Anyone in the household can add, buy and remove items.
@@ -165,7 +167,8 @@ public class ShoppingItemService {
             throw new ConflictException("Some items are already saved as an expense");
         }
 
-        ExpenseResponse saved = expenseService.create(householdId, request.expense(), currentUserEmail);
+        ExpenseResponse saved = expenseService.create(householdId,
+                withItemsTextIfMissing(request.expense(), items), currentUserEmail);
         Expense expense = expenseRepository.findById(saved.id())
                 .orElseThrow(() -> new ResourceNotFoundException("Expense not found: " + saved.id()));
 
@@ -181,6 +184,29 @@ public class ShoppingItemService {
     }
 
     // ---------- Rules and helpers ----------
+
+    // A checkout whose expense has no product list gets the item names, one per line, in list order
+    // (oldest first, as the open list shows them). A product list sent by the app is kept as it is.
+    private static ExpenseRequest withItemsTextIfMissing(ExpenseRequest expense, List<ShoppingItem> items) {
+        if (ExpenseService.normalizeItemsText(expense.itemsText()) != null) {
+            return expense;
+        }
+        String names = items.stream()
+                .sorted(Comparator.comparing(ShoppingItem::getCreatedAt).thenComparing(ShoppingItem::getId))
+                .map(item -> item.getName().replace("\r", " ").replace("\n", " "))
+                .collect(Collectors.joining("\n"));
+        return new ExpenseRequest(
+                expense.paidByUserId(),
+                expense.amount(),
+                expense.category(),
+                expense.description(),
+                expense.recurring(),
+                expense.expenseDate(),
+                expense.splitType(),
+                expense.shares(),
+                expense.reminderDaysBefore(),
+                names);
+    }
 
     // Items of ANOTHER household answer 404, the same as a missing item.
     private ShoppingItem findItem(Long householdId, Long itemId) {
