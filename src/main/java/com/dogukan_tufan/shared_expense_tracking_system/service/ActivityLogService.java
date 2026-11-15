@@ -42,7 +42,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
-// Writes and reads the household activity history ("Bulent changed Rent: amount ...").
+// Writes and reads the household activity history ("Mert changed Rent: amount ...").
 //
 // Why the writes run inside the caller's transaction: every caller (HouseholdService, ExpenseService,
 // ...) is already @Transactional. This class is @Transactional too, with the default setting, so it
@@ -296,7 +296,7 @@ public class ActivityLogService {
         List<FieldChange> changes = new ArrayList<>();
         addChange(changes, "name", before.name(), after.name());
         // The people and their order are one change. The values are the user ids in turn order
-        // ("1,2,3"); the read endpoint turns them into names ("Doğukan, Bülent, Hatem").
+        // ("1,2,3"); the read endpoint turns them into names ("Doğukan, Mert, Kerem").
         if (!before.rotationUserIds().equals(after.rotationUserIds())) {
             changes.add(new FieldChange("rotation", idListText(before.rotationUserIds()),
                     idListText(after.rotationUserIds()), null));
@@ -696,7 +696,7 @@ public class ActivityLogService {
         return ids;
     }
 
-    // "1,2,3" -> "Doğukan, Bülent, Hatem". Null stays null (old rows had no values).
+    // "1,2,3" -> "Doğukan, Mert, Kerem". Null stays null (old rows had no values).
     private static String namesOf(String idList, Map<Long, String> names) {
         if (idList == null) {
             return null;

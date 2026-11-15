@@ -104,7 +104,7 @@ public class BalanceService {
     // - a deposit transfer: the taker owes the giver (see DepositTransfer);
     // - a payment: lowers what the sender owes the receiver.
     // Why not the shortest list of payments ("simplified debts"): it could tell Ali to pay Dogukan for
-    // an expense Bulent paid, which confused users and did not fit the per-person share message or the
+    // an expense Mert paid, which confused users and did not fit the per-person share message or the
     // rule that only the sender or the receiver may mark a payment as paid. Each person's balance
     // (getBalances) is the same either way; only this list changes. Nothing is stored, as with balances.
     public List<SettlementResponse> getSettlements(Long householdId, String currentUserEmail) {

@@ -20,7 +20,7 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.time.Instant;
 
-// One entry in a household's activity history ("Bulent changed Rent: amount 30000.00 -> 31000.00").
+// One entry in a household's activity history ("Mert changed Rent: amount 30000.00 -> 31000.00").
 //
 // Why data and not finished sentences: the app builds the text in the user's language, so the same
 // row reads correctly in TR or EN and the server does not need to know the locale.
