@@ -36,7 +36,9 @@ API, mobil uygulamanın backend'idir: [roommate-expense-app](https://github.com/
 - Üyeler evden ayrılabilir. Evin son admini ayrılamaz ve admin rolü düşürülemez.
 
 **Giderler ve paylaştırma**
-- Tutar, kategori (`RENT`, `UTILITIES`, `GROCERIES`, `OTHER`), ödeyen kişi, tarih ve açıklama ile tam CRUD.
+- Tutar, kategori, ödeyen kişi, tarih ve açıklama ile tam CRUD.
+- 12 kategori: `RENT`, `UTILITIES`, `GROCERIES`, `CLEANING`, `EATING_OUT`, `SUBSCRIPTIONS`, `HOME_REPAIR`, `PETS`, `ENTERTAINMENT`, `TRANSPORT`, `HEALTH_BEAUTY` ve `OTHER`.
+- İsteğe bağlı ürün listesi (`itemsText`, en fazla 2000 karakter, her satırda bir ürün). Mobil uygulama bu listeyi taranan fişten doldurur; elle de yazılabilir. Boş metin "liste yok" olarak saklanır. Tekrarlanan kopyalarda korunur, özet satırlarında yer alır ve uygulama liste göndermezse alışveriş listesinden kaydedilen giderde alınan ürünlerin adlarıyla doldurulur.
 - Üç paylaşım türü: `EQUAL` (eşit), `PERCENT` (yüzde) ve `AMOUNT` (tutar). Ödeyen kişi her giderin hangi üyeler arasında paylaşılacağını seçer.
 - Paylar kuruş cinsinden tam sayı olarak hesaplanır; böylece paylar her zaman tutarın tamamına eşit olur (ör. 100 TL / 3 = 33,34 + 33,33 + 33,33).
 - Her kategori için kaydedilebilir bir varsayılan paylaşım (kişi başı yüzde) tanımlanabilir. Bu varsayılan yalnızca aynı kişiler hâlâ aktif üye olduğu sürece kullanılır.
@@ -122,7 +124,7 @@ controller  →  service  →  repository  →  entity
 | `Household` | Ortak bir ev. Kurucusunu (`createdBy`) tutar |
 | `Membership` | Bir kullanıcıyı bir evle, bir rolle (`ADMIN` / `MEMBER`) ilişkilendirir. `leftAt` evden ayrılmış üyeyi işaretler |
 | `Invitation` | Bir adminin kayıtlı bir kullanıcıya gönderdiği davet. Durum: `PENDING`, `ACCEPTED`, `DECLINED`, `CANCELLED` |
-| `Expense` | Bir üyenin ödediği tutar: kategori, açıklama, tarih, paylaşım türü, tekrar bilgisi, zincir bağlantısı ve fatura hatırlatma ayarı (`reminderDaysBefore`: `0`, `1`, `3` veya `7`) |
+| `Expense` | Bir üyenin ödediği tutar: kategori, açıklama, ürün listesi (`itemsText`), tarih, paylaşım türü, tekrar bilgisi, zincir bağlantısı ve fatura hatırlatma ayarı (`reminderDaysBefore`: `0`, `1`, `3` veya `7`) |
 | `ExpenseShare` | Bir giderde bir üyenin payı: borçlu olduğu tutar ve yüzde paylaşımlarda yüzdesi |
 | `CategorySplitDefault` | Bir evin, bir kategori için kaydedilmiş varsayılan paylaşımı |
 | `Payment` | Bir üyenin diğerine yaptığı geri ödeme: tutar, not ve zaman |
@@ -158,6 +160,7 @@ Bakiyeler ve borç kapatma önerileri bu üç tablodan (ve depozito transferleri
 - **Bildirim ve tekrarlayan giderler için `AFTER_COMMIT` olayları.** Bildirimler, push'lar ve tekrarlayan kopyalar yalnızca veritabanı işlemi kaydedildikten sonra çalışır. Geri alınmış bir değişikliği asla duyurmaz veya kopyalamaz; bu aşamadaki bir hata, başarılı bir isteği hataya çevirmez.
 - **Dosyalar diskte, bilgiler veritabanında.** İkili dosyalar veritabanının dışında tutulur. Her dosyaya rastgele bir UUID adı verilir; böylece kullanıcının verdiği ad yol geçişine (path traversal) veya çakışmaya yol açamaz. Dosyalar yalnızca veritabanı değişikliği kaydedildikten sonra silinir. Üretim ortamında bu katman Amazon S3 gibi bir nesne depolama servisiyle değiştirilebilir; kodun geri kalanı değişmez.
 - **Üyelikte soft delete.** Evden ayrılmak satırı silmez, `leftAt` alanını doldurur. Geçmiş giderler gerçek bir kullanıcıya bağlı kalır ve borçlar kapatılana kadar görünür durumda kalır.
+- **Enum CHECK kısıtlarının başlangıçta yenilenmesi.** Hibernate'in `ddl-auto: update` ayarı, enum'un o anki değerleriyle veritabanında bir `CHECK` kısıtı oluşturur ama bu kısıtı sonradan hiç güncellemez. Bu durumda `CLEANING` gibi yeni bir değer veritabanı tarafından reddedilirdi. Uygulama başlarken `EnumCheckConstraintUpdater` bu kısıtları güncel Java enum'larından yeniden kurar (gider ve varsayılan paylaşım kategorileri, bildirim türleri, aktivite türleri).
 - **Başlangıçta `Locale.ROOT` ("Türkçe I" hatası).** Varsayılan dili Türkçe olan bir makinede `"HIGH".toLowerCase()` çağrısı `"hıgh"` (noktasız ı) üretir. Firebase SDK gibi kütüphaneler enum adlarını küçük harfe çevirir ve push mesajları reddedilirdi. Bu yüzden JVM'in varsayılan dili uygulama başlarken `Locale.ROOT` olarak ayarlanır; Türkçe metin gerektiğinde ise açıkça Türkçe biçimlendirilir.
 
 ## Kurulum

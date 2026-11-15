@@ -36,7 +36,9 @@ The API is the backend for the mobile app: [roommate-expense-app](https://github
 - Members can leave a household. The last admin cannot leave or be demoted.
 
 **Expenses and splitting**
-- Full CRUD for expenses with amount, category (`RENT`, `UTILITIES`, `GROCERIES`, `OTHER`), payer, date, and description.
+- Full CRUD for expenses with amount, category, payer, date, and description.
+- 12 categories: `RENT`, `UTILITIES`, `GROCERIES`, `CLEANING`, `EATING_OUT`, `SUBSCRIPTIONS`, `HOME_REPAIR`, `PETS`, `ENTERTAINMENT`, `TRANSPORT`, `HEALTH_BEAUTY` and `OTHER`.
+- An optional product list (`itemsText`, up to 2000 characters, one product per line). The mobile app fills it from a scanned receipt; it can also be typed by hand. Blank text is stored as no list. Recurring copies keep it, statement rows include it, and a shopping list checkout fills it with the bought item names when the app sends none.
 - Three split types: `EQUAL`, `PERCENT` and `AMOUNT`. The payer chooses which members share each expense.
 - Splits are calculated in whole cents, so the shares always add up exactly to the amount (e.g. 100 TL / 3 = 33.34 + 33.33 + 33.33).
 - Each category can have a saved default split (per-person percentages). It is used only while the same people are active members.
@@ -122,7 +124,7 @@ controller  →  service  →  repository  →  entity
 | `Household` | A shared home. Stores its founder (`createdBy`) |
 | `Membership` | Links a user to a household with a role (`ADMIN` / `MEMBER`). `leftAt` marks a member who has left |
 | `Invitation` | An admin's invitation to a registered user. Status: `PENDING`, `ACCEPTED`, `DECLINED`, `CANCELLED` |
-| `Expense` | An amount paid by one member: category, description, date, split type, recurring flag, chain link, and bill reminder setting (`reminderDaysBefore`: `0`, `1`, `3` or `7`) |
+| `Expense` | An amount paid by one member: category, description, product list (`itemsText`), date, split type, recurring flag, chain link, and bill reminder setting (`reminderDaysBefore`: `0`, `1`, `3` or `7`) |
 | `ExpenseShare` | One member's part of an expense: the amount they owe and, for percentage splits, their percent |
 | `CategorySplitDefault` | The saved default split of one category in one household |
 | `Payment` | A repayment from one member to another, with amount, note and time |
@@ -158,6 +160,7 @@ Balances and settlement suggestions are **computed** from these three tables, pl
 - **`AFTER_COMMIT` events for notifications and recurring expenses.** Notifications, pushes and recurring copies run only after the database transaction has committed. They never announce or copy something that was rolled back, and a failure there does not turn a successful request into an error.
 - **Files on disk, metadata in the database.** Binary files are kept out of the database. Each file gets a random UUID name, so user-supplied names cannot cause path traversal or collisions. Files are deleted only after the database change is committed. In a production deployment this layer would be replaced by object storage such as Amazon S3, without changing the rest of the code.
 - **Soft delete for memberships.** Leaving a household sets `leftAt` instead of deleting the row. Past expenses keep pointing at a real user, and debts stay visible until they are settled.
+- **Enum check constraints rebuilt at startup.** Hibernate's `ddl-auto: update` creates a database `CHECK` constraint with the enum values that exist at that moment, but never updates it. A new value such as `CLEANING` would then be rejected by the database. At startup, `EnumCheckConstraintUpdater` rebuilds these constraints from the current Java enums (expense and split default categories, notification types, activity types).
 - **Locale.ROOT at startup (the "Turkish I" bug).** On a machine with a Turkish default locale, `"HIGH".toLowerCase()` becomes `"hıgh"` (dotless ı). Libraries such as the Firebase SDK lowercase enum names, and the push messages were rejected. The JVM default locale is set to `Locale.ROOT` at startup, and Turkish text is formatted explicitly where it is needed.
 
 ## Getting Started
